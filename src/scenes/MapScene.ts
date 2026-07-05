@@ -3,9 +3,22 @@ import { MAP_HEIGHT, MAP_WIDTH, MAX_JUMP_DIST, SYSTEMS, type StarSystem } from '
 import { gameState } from '../game/GameState'
 
 const VIEW_PAD = 90
+const MIN_ZOOM_FACTOR = 0.5
+const MAX_ZOOM_FACTOR = 4
+const DRAG_CLICK_THRESHOLD = 6
 
 export class MapScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
+  private homeZoom = 1
+  private homeX = 0
+  private homeY = 0
+  private minZoom = 0.1
+  private maxZoom = 4
+  private isPointerDown = false
+  private pointerOnSystem = false
+  private didDrag = false
+  private dragLastX = 0
+  private dragLastY = 0
 
   constructor() {
     super('MapScene')
@@ -19,9 +32,14 @@ export class MapScene extends Phaser.Scene {
     // so every system frames its neighbors the same consistent way.
     const zoom = Math.min(this.scale.width / 2 / (MAX_JUMP_DIST + VIEW_PAD), this.scale.height / 2 / (MAX_JUMP_DIST + VIEW_PAD), 1)
     this.cameras.main.setZoom(zoom)
+    this.homeZoom = zoom
+    this.minZoom = zoom * MIN_ZOOM_FACTOR
+    this.maxZoom = zoom * MAX_ZOOM_FACTOR
 
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
     this.cameras.main.centerOn(here.x, here.y)
+    this.homeX = here.x
+    this.homeY = here.y
 
     const title = this.add
       .text(this.scale.width / 2, 30, gameState.companyName, {
@@ -46,6 +64,57 @@ export class MapScene extends Phaser.Scene {
     uiCamera.ignore(worldObjects)
 
     this.refreshHud()
+    this.setupCameraControls()
+  }
+
+  private setupCameraControls() {
+    const cam = this.cameras.main
+
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => {
+      const oldZoom = cam.zoom
+      const newZoom = Phaser.Math.Clamp(oldZoom * (dy > 0 ? 0.9 : 1.1), this.minZoom, this.maxZoom)
+      if (newZoom === oldZoom) return
+
+      const worldPoint = cam.getWorldPoint(pointer.x, pointer.y)
+      cam.setZoom(newZoom)
+      const newWorldPoint = cam.getWorldPoint(pointer.x, pointer.y)
+      cam.scrollX += worldPoint.x - newWorldPoint.x
+      cam.scrollY += worldPoint.y - newWorldPoint.y
+    })
+
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.isPointerDown = true
+      this.didDrag = false
+      this.dragLastX = pointer.x
+      this.dragLastY = pointer.y
+      this.pointerOnSystem = this.input.hitTestPointer(pointer).length > 0
+    })
+
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.isPointerDown || this.pointerOnSystem) return
+
+      const dx = pointer.x - this.dragLastX
+      const dy = pointer.y - this.dragLastY
+      if (!this.didDrag && Math.hypot(pointer.x - pointer.downX, pointer.y - pointer.downY) > DRAG_CLICK_THRESHOLD) {
+        this.didDrag = true
+      }
+      if (this.didDrag) {
+        cam.scrollX -= dx / cam.zoom
+        cam.scrollY -= dy / cam.zoom
+      }
+      this.dragLastX = pointer.x
+      this.dragLastY = pointer.y
+    })
+
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (!this.pointerOnSystem && !this.didDrag) {
+        cam.pan(this.homeX, this.homeY, 200, 'Sine.easeInOut')
+        cam.zoomTo(this.homeZoom, 200)
+      }
+      this.isPointerDown = false
+      this.didDrag = false
+      this.pointerOnSystem = false
+    })
   }
 
   private drawRoutes(zoom: number): Phaser.GameObjects.GameObject[] {
