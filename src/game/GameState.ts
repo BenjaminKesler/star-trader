@@ -142,10 +142,13 @@ class GameStateImpl {
     return true
   }
 
-  travelTo(systemId: string) {
-    if (systemId === this.currentSystemId) return
+  travelTo(systemId: string): boolean {
+    if (systemId === this.currentSystemId) return false
+    const current = SYSTEMS.find((s) => s.id === this.currentSystemId)!
+    if (!current.connections.includes(systemId)) return false
     this.currentSystemId = systemId
     this.advanceMarketTick()
+    return true
   }
 
   private advanceMarketTick() {
