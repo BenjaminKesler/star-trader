@@ -10,5 +10,9 @@ new Phaser.Game({
   height: 800,
   parent: 'app',
   backgroundColor: '#000010',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
   scene: [BootScene, MapScene, MarketScene],
 })
