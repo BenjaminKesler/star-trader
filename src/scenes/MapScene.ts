@@ -106,7 +106,7 @@ export class MapScene extends Phaser.Scene {
       this.dragLastY = pointer.y
     })
 
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+    this.input.on('pointerup', () => {
       if (!this.pointerOnSystem && !this.didDrag) {
         cam.pan(this.homeX, this.homeY, 200, 'Sine.easeInOut')
         cam.zoomTo(this.homeZoom, 200)
