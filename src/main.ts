@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
+import { MapScene } from './scenes/MapScene'
+import { MarketScene } from './scenes/MarketScene'
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -7,5 +9,5 @@ new Phaser.Game({
   height: 768,
   parent: 'app',
   backgroundColor: '#000010',
-  scene: [BootScene],
+  scene: [BootScene, MapScene, MarketScene],
 })
