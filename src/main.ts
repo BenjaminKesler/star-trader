@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import './style.css'
 import { BootScene } from './scenes/BootScene'
 import { MapScene } from './scenes/MapScene'
 import { MarketScene } from './scenes/MarketScene'
