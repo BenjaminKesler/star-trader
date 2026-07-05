@@ -3,23 +3,23 @@ import { COMMODITIES } from '../data/commodities'
 import { SYSTEMS } from '../data/systems'
 import { gameState } from '../game/GameState'
 
-const ROW_HEIGHT = 40
-const ROW_START_Y = 160
+const ROW_HEIGHT = 60
+const ROW_START_Y = 240
 
-const TABLE_LEFT = 20
-const TABLE_RIGHT = 1240
+const TABLE_LEFT = 30
+const TABLE_RIGHT = 1860
 
-const NAME_X = 40
-const DIVIDER1_X = 230
-const PRICE_X = 260
-const STOCK_X = 400
-const BUY_ONE_X = 490
-const BUY_ALL_X = 565
-const DIVIDER2_X = 750
-const BASIS_X = 780
-const INVENTORY_X = 920
-const SELL_ONE_X = 1010
-const SELL_ALL_X = 1085
+const NAME_X = 60
+const DIVIDER1_X = 345
+const PRICE_X = 390
+const STOCK_X = 600
+const BUY_ONE_X = 735
+const BUY_ALL_X = 848
+const DIVIDER2_X = 1125
+const BASIS_X = 1170
+const INVENTORY_X = 1380
+const SELL_ONE_X = 1515
+const SELL_ALL_X = 1628
 
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
@@ -67,16 +67,16 @@ export class MarketScene extends Phaser.Scene {
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
 
     this.add
-      .text(this.scale.width / 2, 30, `${here.name} Market`, {
+      .text(this.scale.width / 2, 45, `${here.name} Market`, {
         fontFamily: 'monospace',
-        fontSize: '24px',
+        fontSize: '36px',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0)
 
-    this.hud = this.add.text(20, 20, '', {
+    this.hud = this.add.text(30, 30, '', {
       fontFamily: 'monospace',
-      fontSize: '16px',
+      fontSize: '24px',
       color: '#9adfff',
     })
 
@@ -88,9 +88,9 @@ export class MarketScene extends Phaser.Scene {
     this.input.keyboard!.on('keyup-SHIFT', () => this.refresh())
 
     this.add
-      .text(this.scale.width - 20, 20, '< Back to Map', {
+      .text(this.scale.width - 30, 30, '< Back to Map', {
         fontFamily: 'monospace',
-        fontSize: '16px',
+        fontSize: '24px',
         color: '#ffcc66',
       })
       .setOrigin(1, 0)
@@ -101,27 +101,27 @@ export class MarketScene extends Phaser.Scene {
       const y = ROW_START_Y + i * ROW_HEIGHT
 
       const rowBg = this.add
-        .rectangle(TABLE_LEFT, y - 6, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT, ROW_COLOR_EVEN)
+        .rectangle(TABLE_LEFT, y - 9, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT, ROW_COLOR_EVEN)
         .setOrigin(0, 0)
       this.rowBackgrounds[commodity.id] = rowBg
 
       const nameText = this.add.text(NAME_X, y, commodity.name, {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#ffffff',
       })
       this.nameTexts[commodity.id] = nameText
 
       const priceText = this.add.text(PRICE_X, y, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#cccccc',
       })
       this.priceTexts[commodity.id] = priceText
 
       const stockText = this.add.text(STOCK_X, y, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#cccccc',
       })
       this.stockTexts[commodity.id] = stockText
@@ -129,10 +129,10 @@ export class MarketScene extends Phaser.Scene {
       const buyOneBtn = this.add
         .text(BUY_ONE_X, y, 'Buy', {
           fontFamily: 'monospace',
-          fontSize: '18px',
+          fontSize: '27px',
           color: '#44ff88',
           backgroundColor: '#113322',
-          padding: { x: 8, y: 4 },
+          padding: { x: 12, y: 6 },
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -151,10 +151,10 @@ export class MarketScene extends Phaser.Scene {
       const buyAllBtn = this.add
         .text(BUY_ALL_X, y, 'All', {
           fontFamily: 'monospace',
-          fontSize: '18px',
+          fontSize: '27px',
           color: '#44ff88',
           backgroundColor: '#113322',
-          padding: { x: 8, y: 4 },
+          padding: { x: 12, y: 6 },
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -167,14 +167,14 @@ export class MarketScene extends Phaser.Scene {
 
       const basisText = this.add.text(BASIS_X, y, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#888888',
       })
       this.basisTexts[commodity.id] = basisText
 
       const inventoryText = this.add.text(INVENTORY_X, y, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#cccccc',
       })
       this.inventoryTexts[commodity.id] = inventoryText
@@ -182,10 +182,10 @@ export class MarketScene extends Phaser.Scene {
       const sellOneBtn = this.add
         .text(SELL_ONE_X, y, 'Sell', {
           fontFamily: 'monospace',
-          fontSize: '18px',
+          fontSize: '27px',
           color: '#ff8844',
           backgroundColor: '#332211',
-          padding: { x: 8, y: 4 },
+          padding: { x: 12, y: 6 },
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -198,10 +198,10 @@ export class MarketScene extends Phaser.Scene {
       const sellAllBtn = this.add
         .text(SELL_ALL_X, y, 'All', {
           fontFamily: 'monospace',
-          fontSize: '18px',
+          fontSize: '27px',
           color: '#ff8844',
           backgroundColor: '#332211',
-          padding: { x: 8, y: 4 },
+          padding: { x: 12, y: 6 },
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -217,16 +217,16 @@ export class MarketScene extends Phaser.Scene {
       sellAllBtn.name = `sell-all-${commodity.id}`
     })
 
-    this.divider1 = this.add.rectangle(DIVIDER1_X, ROW_START_Y - 6, 2, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
-    this.divider2 = this.add.rectangle(DIVIDER2_X, ROW_START_Y - 6, 2, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
+    this.divider1 = this.add.rectangle(DIVIDER1_X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
+    this.divider2 = this.add.rectangle(DIVIDER2_X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
 
     this.upgradeButton = this.add
-      .text(this.scale.width / 2, ROW_START_Y + COMMODITIES.length * ROW_HEIGHT + 40, '', {
+      .text(this.scale.width / 2, ROW_START_Y + COMMODITIES.length * ROW_HEIGHT + 60, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
+        fontSize: '27px',
         color: '#66ccff',
         backgroundColor: '#112233',
-        padding: { x: 10, y: 6 },
+        padding: { x: 15, y: 9 },
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
@@ -312,7 +312,7 @@ export class MarketScene extends Phaser.Scene {
 
       const y = ROW_START_Y + visibleRow * ROW_HEIGHT
       rowObjects.forEach((obj) => obj?.setY(y))
-      rowBg?.setY(y - 6)
+      rowBg?.setY(y - 9)
       rowBg?.setFillStyle(visibleRow % 2 === 0 ? ROW_COLOR_EVEN : ROW_COLOR_ODD)
       visibleRow++
 
@@ -340,10 +340,10 @@ export class MarketScene extends Phaser.Scene {
     }
 
     const tableHeight = visibleRow * ROW_HEIGHT
-    this.divider1.setSize(2, tableHeight)
-    this.divider2.setSize(2, tableHeight)
+    this.divider1.setSize(3, tableHeight)
+    this.divider2.setSize(3, tableHeight)
 
-    this.upgradeButton.setY(ROW_START_Y + visibleRow * ROW_HEIGHT + 40)
+    this.upgradeButton.setY(ROW_START_Y + visibleRow * ROW_HEIGHT + 60)
     this.upgradeButton.setText(
       `Upgrade Cargo Hold (+${20}) — ${gameState.cargoUpgradeCost().toLocaleString()}cr`,
     )

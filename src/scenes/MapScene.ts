@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { MAP_HEIGHT, MAP_WIDTH, MAX_JUMP_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
 
-const VIEW_PAD = 90
+const VIEW_PAD = 135
 const MIN_ZOOM_FACTOR = 0.5
 const MAX_ZOOM_FACTOR = 4
 const DRAG_CLICK_THRESHOLD = 6
@@ -42,16 +42,16 @@ export class MapScene extends Phaser.Scene {
     this.homeY = here.y
 
     const title = this.add
-      .text(this.scale.width / 2, 30, gameState.companyName, {
+      .text(this.scale.width / 2, 45, gameState.companyName, {
         fontFamily: 'monospace',
-        fontSize: '24px',
+        fontSize: '36px',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0)
 
-    this.hud = this.add.text(20, 20, '', {
+    this.hud = this.add.text(30, 30, '', {
       fontFamily: 'monospace',
-      fontSize: '16px',
+      fontSize: '24px',
       color: '#9adfff',
     })
 
@@ -143,15 +143,15 @@ export class MapScene extends Phaser.Scene {
       const isReachable = here.connections.includes(system.id)
       const fillColor = isHere ? 0x44ff88 : isReachable ? 0x4488ff : 0x445566
 
-      const circle = this.add.circle(system.x, system.y, 22, fillColor)
-      circle.setStrokeStyle(2, isReachable || isHere ? 0xffffff : 0x667788)
+      const circle = this.add.circle(system.x, system.y, 33, fillColor)
+      circle.setStrokeStyle(3, isReachable || isHere ? 0xffffff : 0x667788)
       circle.setScale(markerScale)
       objects.push(circle)
 
       const nameText = this.add
-        .text(system.x, system.y - 40 * markerScale, system.name, {
+        .text(system.x, system.y - 60 * markerScale, system.name, {
           fontFamily: 'monospace',
-          fontSize: '14px',
+          fontSize: '21px',
           color: isReachable || isHere ? '#ffffff' : '#778899',
         })
         .setOrigin(0.5)
@@ -160,9 +160,9 @@ export class MapScene extends Phaser.Scene {
 
       const statusLabel = isHere ? 'DOCKED' : isReachable ? 'Travel' : 'Too Far'
       const statusText = this.add
-        .text(system.x, system.y + 34 * markerScale, statusLabel, {
+        .text(system.x, system.y + 51 * markerScale, statusLabel, {
           fontFamily: 'monospace',
-          fontSize: '12px',
+          fontSize: '18px',
           color: isHere ? '#44ff88' : isReachable ? '#aaaaaa' : '#556677',
         })
         .setOrigin(0.5)
