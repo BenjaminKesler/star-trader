@@ -3,18 +3,51 @@ import { COMMODITIES } from '../data/commodities'
 import { SYSTEMS } from '../data/systems'
 import { gameState } from '../game/GameState'
 
-const TRADE_QTY = 10
-const ROW_HEIGHT = 48
+const ROW_HEIGHT = 40
 const ROW_START_Y = 160
+
+const TABLE_LEFT = 20
+const TABLE_RIGHT = 1240
+
+const NAME_X = 40
+const DIVIDER1_X = 230
+const PRICE_X = 260
+const STOCK_X = 400
+const BUY_ONE_X = 490
+const BUY_ALL_X = 550
+const DIVIDER2_X = 735
+const BASIS_X = 765
+const INVENTORY_X = 905
+const SELL_ONE_X = 995
+const SELL_ALL_X = 1055
+
+const ROW_COLOR_EVEN = 0x0c1424
+const ROW_COLOR_ODD = 0x121d33
+
+const UP_ARROW = '▲'
+const DOWN_ARROW = '▼'
+const EM_DASH = '—'
+
+function formatDelta(percent: number): string {
+  if (percent === 0) return EM_DASH
+  const arrow = percent > 0 ? UP_ARROW : DOWN_ARROW
+  return `${arrow}${Math.abs(percent)}%`
+}
 
 export class MarketScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
   private nameTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
   private priceTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
-  private percentTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
-  private detailTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
-  private buyButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
-  private sellButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private stockTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private basisTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private inventoryTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private buyOneButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private buyAllButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private sellOneButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private sellAllButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private rowBackgrounds: Partial<Record<string, Phaser.GameObjects.Rectangle>> = {}
+  private divider1!: Phaser.GameObjects.Rectangle
+  private divider2!: Phaser.GameObjects.Rectangle
   private upgradeButton!: Phaser.GameObjects.Text
 
   constructor() {
@@ -24,8 +57,10 @@ export class MarketScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor('#000010')
     this.priceTexts = {}
-    this.percentTexts = {}
-    this.detailTexts = {}
+    this.stockTexts = {}
+    this.basisTexts = {}
+    this.inventoryTexts = {}
+    this.rowBackgrounds = {}
 
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
 
@@ -56,36 +91,34 @@ export class MarketScene extends Phaser.Scene {
     COMMODITIES.forEach((commodity, i) => {
       const y = ROW_START_Y + i * ROW_HEIGHT
 
-      const nameText = this.add.text(60, y, commodity.name, {
+      const rowBg = this.add
+        .rectangle(TABLE_LEFT, y - 6, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT, ROW_COLOR_EVEN)
+        .setOrigin(0, 0)
+      this.rowBackgrounds[commodity.id] = rowBg
+
+      const nameText = this.add.text(NAME_X, y, commodity.name, {
         fontFamily: 'monospace',
         fontSize: '18px',
         color: '#ffffff',
       })
       this.nameTexts[commodity.id] = nameText
 
-      const priceText = this.add.text(260, y, '', {
+      const priceText = this.add.text(PRICE_X, y, '', {
         fontFamily: 'monospace',
         fontSize: '18px',
         color: '#cccccc',
       })
       this.priceTexts[commodity.id] = priceText
 
-      const percentText = this.add.text(330, y, '', {
+      const stockText = this.add.text(STOCK_X, y, '', {
         fontFamily: 'monospace',
         fontSize: '18px',
         color: '#cccccc',
       })
-      this.percentTexts[commodity.id] = percentText
+      this.stockTexts[commodity.id] = stockText
 
-      const detailText = this.add.text(400, y, '', {
-        fontFamily: 'monospace',
-        fontSize: '18px',
-        color: '#cccccc',
-      })
-      this.detailTexts[commodity.id] = detailText
-
-      const buyBtn = this.add
-        .text(740, y, `Buy ${TRADE_QTY}`, {
+      const buyOneBtn = this.add
+        .text(BUY_ONE_X, y, 'Buy', {
           fontFamily: 'monospace',
           fontSize: '18px',
           color: '#44ff88',
@@ -94,13 +127,45 @@ export class MarketScene extends Phaser.Scene {
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = Math.min(TRADE_QTY, gameState.getStock(commodity.id), gameState.cargoFree)
+          const qty = Math.min(1, gameState.getStock(commodity.id), gameState.cargoFree)
           gameState.buy(commodity.id, qty)
           this.refresh()
         })
+      this.buyOneButtons[commodity.id] = buyOneBtn
 
-      const sellBtn = this.add
-        .text(890, y, `Sell ${TRADE_QTY}`, {
+      const buyAllBtn = this.add
+        .text(BUY_ALL_X, y, 'All', {
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          color: '#44ff88',
+          backgroundColor: '#113322',
+          padding: { x: 8, y: 4 },
+        })
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          const affordable = Math.floor(gameState.credits / gameState.getPrice(commodity.id))
+          const qty = Math.min(affordable, gameState.getStock(commodity.id), gameState.cargoFree)
+          gameState.buy(commodity.id, qty)
+          this.refresh()
+        })
+      this.buyAllButtons[commodity.id] = buyAllBtn
+
+      const basisText = this.add.text(BASIS_X, y, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#888888',
+      })
+      this.basisTexts[commodity.id] = basisText
+
+      const inventoryText = this.add.text(INVENTORY_X, y, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#cccccc',
+      })
+      this.inventoryTexts[commodity.id] = inventoryText
+
+      const sellOneBtn = this.add
+        .text(SELL_ONE_X, y, 'Sell', {
           fontFamily: 'monospace',
           fontSize: '18px',
           color: '#ff8844',
@@ -109,16 +174,36 @@ export class MarketScene extends Phaser.Scene {
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = Math.min(TRADE_QTY, gameState.cargo[commodity.id] ?? 0)
+          const qty = Math.min(1, gameState.cargo[commodity.id] ?? 0)
           gameState.sell(commodity.id, qty)
           this.refresh()
         })
+      this.sellOneButtons[commodity.id] = sellOneBtn
 
-      buyBtn.name = `buy-${commodity.id}`
-      sellBtn.name = `sell-${commodity.id}`
-      this.buyButtons[commodity.id] = buyBtn
-      this.sellButtons[commodity.id] = sellBtn
+      const sellAllBtn = this.add
+        .text(SELL_ALL_X, y, 'All', {
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          color: '#ff8844',
+          backgroundColor: '#332211',
+          padding: { x: 8, y: 4 },
+        })
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          const qty = gameState.cargo[commodity.id] ?? 0
+          gameState.sell(commodity.id, qty)
+          this.refresh()
+        })
+      this.sellAllButtons[commodity.id] = sellAllBtn
+
+      buyOneBtn.name = `buy-one-${commodity.id}`
+      buyAllBtn.name = `buy-all-${commodity.id}`
+      sellOneBtn.name = `sell-one-${commodity.id}`
+      sellAllBtn.name = `sell-all-${commodity.id}`
     })
+
+    this.divider1 = this.add.rectangle(DIVIDER1_X, ROW_START_Y - 6, 2, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
+    this.divider2 = this.add.rectangle(DIVIDER2_X, ROW_START_Y - 6, 2, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
 
     this.upgradeButton = this.add
       .text(this.scale.width / 2, ROW_START_Y + COMMODITIES.length * ROW_HEIGHT + 40, '', {
@@ -156,33 +241,81 @@ export class MarketScene extends Phaser.Scene {
 
       const nameText = this.nameTexts[commodity.id]
       const priceText = this.priceTexts[commodity.id]
-      const percentText = this.percentTexts[commodity.id]
-      const detailText = this.detailTexts[commodity.id]
-      const buyBtn = this.buyButtons[commodity.id]
-      const sellBtn = this.sellButtons[commodity.id]
+      const stockText = this.stockTexts[commodity.id]
+      const basisText = this.basisTexts[commodity.id]
+      const inventoryText = this.inventoryTexts[commodity.id]
+      const buyOneBtn = this.buyOneButtons[commodity.id]
+      const buyAllBtn = this.buyAllButtons[commodity.id]
+      const sellOneBtn = this.sellOneButtons[commodity.id]
+      const sellAllBtn = this.sellAllButtons[commodity.id]
+      const rowBg = this.rowBackgrounds[commodity.id]
 
-      const rowObjects = [nameText, priceText, percentText, detailText, buyBtn, sellBtn]
+      const rowObjects = [
+        rowBg,
+        nameText,
+        priceText,
+        stockText,
+        basisText,
+        inventoryText,
+        buyOneBtn,
+        buyAllBtn,
+        sellOneBtn,
+        sellAllBtn,
+      ]
       rowObjects.forEach((obj) => obj?.setVisible(!hidden))
       if (hidden) {
-        buyBtn?.disableInteractive()
-        sellBtn?.disableInteractive()
+        buyOneBtn?.disableInteractive()
+        buyAllBtn?.disableInteractive()
+        sellOneBtn?.disableInteractive()
+        sellAllBtn?.disableInteractive()
         continue
       }
-      buyBtn?.setInteractive({ useHandCursor: true })
-      sellBtn?.setInteractive({ useHandCursor: true })
+
+      const canBuy = stock > 0 && gameState.cargoFree > 0 && gameState.canAfford(commodity.id, 1)
+      const canSell = held > 0
+      if (canBuy) {
+        buyOneBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
+        buyAllBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
+      } else {
+        buyOneBtn?.disableInteractive().setAlpha(0.4)
+        buyAllBtn?.disableInteractive().setAlpha(0.4)
+      }
+      if (canSell) {
+        sellOneBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
+        sellAllBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
+      } else {
+        sellOneBtn?.disableInteractive().setAlpha(0.4)
+        sellAllBtn?.disableInteractive().setAlpha(0.4)
+      }
 
       const y = ROW_START_Y + visibleRow * ROW_HEIGHT
       rowObjects.forEach((obj) => obj?.setY(y))
+      rowBg?.setY(y - 6)
+      rowBg?.setFillStyle(visibleRow % 2 === 0 ? ROW_COLOR_EVEN : ROW_COLOR_ODD)
       visibleRow++
 
       const percentOffBase = Math.round(((price - commodity.basePrice) / commodity.basePrice) * 100)
-      const sign = percentOffBase >= 0 ? '+' : ''
+      priceText?.setText(`${price}cr ${formatDelta(percentOffBase)}`)
+      priceText?.setColor(percentOffBase > 0 ? '#ff8844' : percentOffBase < 0 ? '#44ff88' : '#cccccc')
 
-      priceText?.setText(`${price}cr`)
-      percentText?.setText(`${sign}${percentOffBase}%`)
-      percentText?.setColor(percentOffBase > 0 ? '#ff8844' : percentOffBase < 0 ? '#44ff88' : '#cccccc')
-      detailText?.setText(`(stock ${stock}, holding ${held})`)
+      stockText?.setText(`(${stock})`)
+
+      const basisDelta = gameState.getBasisDeltaPercent(commodity.id)
+      if (basisDelta === null) {
+        basisText?.setText('')
+      } else {
+        const avgBasis = gameState.getAverageBasis(commodity.id)!
+        const roundedDelta = Math.round(basisDelta)
+        basisText?.setText(`${Math.round(avgBasis)}cr ${formatDelta(roundedDelta)}`)
+        basisText?.setColor(roundedDelta > 0 ? '#44ff88' : roundedDelta < 0 ? '#ff8844' : '#ffffff')
+      }
+
+      inventoryText?.setText(`(${held})`)
     }
+
+    const tableHeight = visibleRow * ROW_HEIGHT
+    this.divider1.setSize(2, tableHeight)
+    this.divider2.setSize(2, tableHeight)
 
     this.upgradeButton.setY(ROW_START_Y + visibleRow * ROW_HEIGHT + 40)
     this.upgradeButton.setText(

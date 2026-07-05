@@ -47,6 +47,7 @@ class GameStateImpl {
   cargoCapacity = CARGO_UPGRADE_STEP
   cargoUpgradeLevel = 0
   cargo: CargoHold = emptyCargo()
+  private cargoBasis: CargoHold = emptyCargo()
 
   galaxyRates: Record<CommodityId, number> = {} as Record<CommodityId, number>
   localRates: RateTable = {}
@@ -102,14 +103,29 @@ class GameStateImpl {
     return this.getPrice(commodityId) * qty <= this.credits
   }
 
+  getAverageBasis(commodityId: CommodityId): number | null {
+    const held = this.cargo[commodityId]
+    if (held <= 0) return null
+    return this.cargoBasis[commodityId] / held
+  }
+
+  getBasisDeltaPercent(commodityId: CommodityId, systemId = this.currentSystemId): number | null {
+    const basis = this.getAverageBasis(commodityId)
+    if (basis === null) return null
+    const price = this.getPrice(commodityId, systemId)
+    return ((price - basis) / basis) * 100
+  }
+
   buy(commodityId: CommodityId, qty: number): boolean {
     if (qty <= 0) return false
     if (qty > this.cargoFree) return false
     if (qty > this.getStock(commodityId)) return false
     if (!this.canAfford(commodityId, qty)) return false
 
-    this.credits -= this.getPrice(commodityId) * qty
+    const cost = this.getPrice(commodityId) * qty
+    this.credits -= cost
     this.cargo[commodityId] += qty
+    this.cargoBasis[commodityId] += cost
     this.stock[this.currentSystemId][commodityId] -= qty
     return true
   }
@@ -118,8 +134,10 @@ class GameStateImpl {
     if (qty <= 0) return false
     if (qty > this.cargo[commodityId]) return false
 
+    const avgBasis = this.getAverageBasis(commodityId) ?? 0
     this.credits += this.getPrice(commodityId) * qty
     this.cargo[commodityId] -= qty
+    this.cargoBasis[commodityId] -= avgBasis * qty
     this.stock[this.currentSystemId][commodityId] += qty
     return true
   }
