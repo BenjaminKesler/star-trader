@@ -9,9 +9,12 @@ const ROW_START_Y = 160
 
 export class MarketScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
+  private nameTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
   private priceTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
   private percentTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
   private detailTexts: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private buyButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
+  private sellButtons: Partial<Record<string, Phaser.GameObjects.Text>> = {}
   private upgradeButton!: Phaser.GameObjects.Text
 
   constructor() {
@@ -53,11 +56,12 @@ export class MarketScene extends Phaser.Scene {
     COMMODITIES.forEach((commodity, i) => {
       const y = ROW_START_Y + i * ROW_HEIGHT
 
-      this.add.text(60, y, commodity.name, {
+      const nameText = this.add.text(60, y, commodity.name, {
         fontFamily: 'monospace',
         fontSize: '18px',
         color: '#ffffff',
       })
+      this.nameTexts[commodity.id] = nameText
 
       const priceText = this.add.text(260, y, '', {
         fontFamily: 'monospace',
@@ -105,12 +109,15 @@ export class MarketScene extends Phaser.Scene {
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          gameState.sell(commodity.id, TRADE_QTY)
+          const qty = Math.min(TRADE_QTY, gameState.cargo[commodity.id] ?? 0)
+          gameState.sell(commodity.id, qty)
           this.refresh()
         })
 
       buyBtn.name = `buy-${commodity.id}`
       sellBtn.name = `sell-${commodity.id}`
+      this.buyButtons[commodity.id] = buyBtn
+      this.sellButtons[commodity.id] = sellBtn
     })
 
     this.upgradeButton = this.add
@@ -139,20 +146,45 @@ export class MarketScene extends Phaser.Scene {
       ].join('  |  '),
     )
 
+    let visibleRow = 0
+
     for (const commodity of COMMODITIES) {
       const price = gameState.getPrice(commodity.id)
-      const held = gameState.cargo[commodity.id]
+      const held = gameState.cargo[commodity.id] ?? 0
       const stock = gameState.getStock(commodity.id)
+      const hidden = stock === 0 && held === 0
+
+      const nameText = this.nameTexts[commodity.id]
+      const priceText = this.priceTexts[commodity.id]
+      const percentText = this.percentTexts[commodity.id]
+      const detailText = this.detailTexts[commodity.id]
+      const buyBtn = this.buyButtons[commodity.id]
+      const sellBtn = this.sellButtons[commodity.id]
+
+      const rowObjects = [nameText, priceText, percentText, detailText, buyBtn, sellBtn]
+      rowObjects.forEach((obj) => obj?.setVisible(!hidden))
+      if (hidden) {
+        buyBtn?.disableInteractive()
+        sellBtn?.disableInteractive()
+        continue
+      }
+      buyBtn?.setInteractive({ useHandCursor: true })
+      sellBtn?.setInteractive({ useHandCursor: true })
+
+      const y = ROW_START_Y + visibleRow * ROW_HEIGHT
+      rowObjects.forEach((obj) => obj?.setY(y))
+      visibleRow++
+
       const percentOffBase = Math.round(((price - commodity.basePrice) / commodity.basePrice) * 100)
       const sign = percentOffBase >= 0 ? '+' : ''
 
-      this.priceTexts[commodity.id]?.setText(`${price}cr`)
-      const percentText = this.percentTexts[commodity.id]
+      priceText?.setText(`${price}cr`)
       percentText?.setText(`${sign}${percentOffBase}%`)
       percentText?.setColor(percentOffBase > 0 ? '#ff8844' : percentOffBase < 0 ? '#44ff88' : '#cccccc')
-      this.detailTexts[commodity.id]?.setText(`(stock ${stock}, holding ${held})`)
+      detailText?.setText(`(stock ${stock}, holding ${held})`)
     }
 
+    this.upgradeButton.setY(ROW_START_Y + visibleRow * ROW_HEIGHT + 40)
     this.upgradeButton.setText(
       `Upgrade Cargo Hold (+${20}) — ${gameState.cargoUpgradeCost().toLocaleString()}cr`,
     )

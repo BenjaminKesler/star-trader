@@ -120,6 +120,7 @@ class GameStateImpl {
 
     this.credits += this.getPrice(commodityId) * qty
     this.cargo[commodityId] -= qty
+    this.stock[this.currentSystemId][commodityId] += qty
     return true
   }
 
