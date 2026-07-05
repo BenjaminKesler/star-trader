@@ -14,12 +14,12 @@ const DIVIDER1_X = 230
 const PRICE_X = 260
 const STOCK_X = 400
 const BUY_ONE_X = 490
-const BUY_ALL_X = 550
-const DIVIDER2_X = 735
-const BASIS_X = 765
-const INVENTORY_X = 905
-const SELL_ONE_X = 995
-const SELL_ALL_X = 1055
+const BUY_ALL_X = 565
+const DIVIDER2_X = 750
+const BASIS_X = 780
+const INVENTORY_X = 920
+const SELL_ONE_X = 1010
+const SELL_ALL_X = 1085
 
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
@@ -49,6 +49,8 @@ export class MarketScene extends Phaser.Scene {
   private divider1!: Phaser.GameObjects.Rectangle
   private divider2!: Phaser.GameObjects.Rectangle
   private upgradeButton!: Phaser.GameObjects.Text
+  private ctrlKey!: Phaser.Input.Keyboard.Key
+  private shiftKey!: Phaser.Input.Keyboard.Key
 
   constructor() {
     super('MarketScene')
@@ -77,6 +79,13 @@ export class MarketScene extends Phaser.Scene {
       fontSize: '16px',
       color: '#9adfff',
     })
+
+    this.ctrlKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL)
+    this.shiftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT)
+    this.input.keyboard!.on('keydown-CTRL', () => this.refresh())
+    this.input.keyboard!.on('keyup-CTRL', () => this.refresh())
+    this.input.keyboard!.on('keydown-SHIFT', () => this.refresh())
+    this.input.keyboard!.on('keyup-SHIFT', () => this.refresh())
 
     this.add
       .text(this.scale.width - 20, 20, '< Back to Map', {
@@ -127,7 +136,13 @@ export class MarketScene extends Phaser.Scene {
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = Math.min(1, gameState.getStock(commodity.id), gameState.cargoFree)
+          const affordable = Math.floor(gameState.credits / gameState.getPrice(commodity.id))
+          const qty = Math.min(
+            this.getTradeMultiplier(),
+            gameState.getStock(commodity.id),
+            gameState.cargoFree,
+            affordable,
+          )
           gameState.buy(commodity.id, qty)
           this.refresh()
         })
@@ -174,7 +189,7 @@ export class MarketScene extends Phaser.Scene {
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = Math.min(1, gameState.cargo[commodity.id] ?? 0)
+          const qty = Math.min(this.getTradeMultiplier(), gameState.cargo[commodity.id] ?? 0)
           gameState.sell(commodity.id, qty)
           this.refresh()
         })
@@ -221,6 +236,13 @@ export class MarketScene extends Phaser.Scene {
       })
 
     this.refresh()
+  }
+
+  private getTradeMultiplier(): number {
+    if (this.ctrlKey.isDown && this.shiftKey.isDown) return 1000
+    if (this.shiftKey.isDown) return 100
+    if (this.ctrlKey.isDown) return 10
+    return 1
   }
 
   private refresh() {
@@ -311,6 +333,10 @@ export class MarketScene extends Phaser.Scene {
       }
 
       inventoryText?.setText(`(${held})`)
+
+      const multiplier = this.getTradeMultiplier()
+      buyOneBtn?.setText(multiplier === 1 ? 'Buy' : `x${multiplier}`)
+      sellOneBtn?.setText(multiplier === 1 ? 'Sell' : `x${multiplier}`)
     }
 
     const tableHeight = visibleRow * ROW_HEIGHT
