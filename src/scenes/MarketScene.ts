@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { COMMODITIES } from '../data/commodities'
 import { SYSTEMS } from '../data/systems'
 import { gameState } from '../game/GameState'
+import { createTabBar } from '../ui/TabBar'
 
 const ROW_HEIGHT = 60
 const ROW_START_Y = 240
@@ -69,15 +70,17 @@ export class MarketScene extends Phaser.Scene {
 
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
 
+    createTabBar(this, this.scene.key)
+
     this.add
-      .text(this.scale.width / 2, 45, `${here.name} Market`, {
+      .text(this.scale.width / 2, 75, `${here.name} Market`, {
         fontFamily: 'monospace',
         fontSize: '36px',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0)
 
-    this.hud = this.add.text(30, 30, '', {
+    this.hud = this.add.text(30, 70, '', {
       fontFamily: 'monospace',
       fontSize: '24px',
       color: '#9adfff',
@@ -89,16 +92,6 @@ export class MarketScene extends Phaser.Scene {
     this.input.keyboard!.on('keyup-CTRL', () => this.refresh())
     this.input.keyboard!.on('keydown-SHIFT', () => this.refresh())
     this.input.keyboard!.on('keyup-SHIFT', () => this.refresh())
-
-    this.add
-      .text(this.scale.width - 30, 30, '< Back to Map', {
-        fontFamily: 'monospace',
-        fontSize: '24px',
-        color: '#ffcc66',
-      })
-      .setOrigin(1, 0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.scene.start('MapScene'))
 
     const availableWidth = this.scale.width - TABLE_MARGIN * 2
     const tableWidth = Math.min(DESIGN_TABLE_WIDTH, availableWidth)

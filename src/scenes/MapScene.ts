@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
+import { createTabBar } from '../ui/TabBar'
 
 const VIEW_PAD = 135
 /** Empty margin (world units) kept around the systems when bounding the camera. */
@@ -57,24 +58,18 @@ export class MapScene extends Phaser.Scene {
     this.homeX = here.x
     this.homeY = here.y
 
-    const title = this.add
-      .text(this.scale.width / 2, 45, gameState.companyName, {
-        fontFamily: 'monospace',
-        fontSize: '36px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5, 0)
-
-    this.hud = this.add.text(30, 30, '', {
+    this.hud = this.add.text(30, 70, '', {
       fontFamily: 'monospace',
       fontSize: '24px',
       color: '#9adfff',
     })
 
-    // A dedicated screen-space camera keeps the HUD/title crisp and fixed
+    const tabBar = createTabBar(this, this.scene.key)
+
+    // A dedicated screen-space camera keeps the HUD/title/tabs crisp and fixed
     // regardless of the main camera's zoom.
     const uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height)
-    this.cameras.main.ignore([title, this.hud])
+    this.cameras.main.ignore([this.hud, ...tabBar])
 
     const worldObjects = [...this.drawRoutes(zoom), ...this.drawStations(here, zoom)]
     uiCamera.ignore(worldObjects)
@@ -170,7 +165,7 @@ export class MapScene extends Phaser.Scene {
       const isReachable = here.connections.includes(system.id)
       const fillColor = isHere ? 0x44ff88 : isReachable ? 0x4488ff : 0x445566
 
-      const circle = this.add.circle(system.x, system.y, 33, fillColor)
+      const circle = this.add.circle(system.x, system.y, 16, fillColor)
       circle.setStrokeStyle(3, isReachable || isHere ? 0xffffff : 0x667788)
       circle.setScale(markerScale)
       objects.push(circle)
