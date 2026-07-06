@@ -6,13 +6,12 @@ import { MarketScene } from './scenes/MarketScene'
 
 new Phaser.Game({
   type: Phaser.AUTO,
-  width: 1920,
-  height: 1200,
+  width: window.innerWidth,
+  height: window.innerHeight,
   parent: 'app',
   backgroundColor: '#000010',
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
   },
   scene: [BootScene, MapScene, MarketScene],
 })

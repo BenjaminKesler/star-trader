@@ -65,6 +65,15 @@ export class MapScene extends Phaser.Scene {
 
     this.refreshHud()
     this.setupCameraControls()
+
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this)
+    })
+  }
+
+  private handleResize() {
+    this.scene.restart()
   }
 
   private setupCameraControls() {

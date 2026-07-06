@@ -6,20 +6,23 @@ import { gameState } from '../game/GameState'
 const ROW_HEIGHT = 60
 const ROW_START_Y = 240
 
-const TABLE_LEFT = 30
-const TABLE_RIGHT = 1860
+// Column offsets are measured from the left edge of the table, designed for
+// a table this wide. On narrower windows they're scaled down proportionally;
+// on wider windows the table is capped at this width and centered.
+const DESIGN_TABLE_WIDTH = 1830
+const TABLE_MARGIN = 30
 
-const NAME_X = 60
-const DIVIDER1_X = 345
-const PRICE_X = 390
-const STOCK_X = 600
-const BUY_ONE_X = 735
-const BUY_ALL_X = 848
-const DIVIDER2_X = 1125
-const BASIS_X = 1170
-const INVENTORY_X = 1380
-const SELL_ONE_X = 1515
-const SELL_ALL_X = 1628
+const NAME_OFFSET = 30
+const DIVIDER1_OFFSET = 315
+const PRICE_OFFSET = 360
+const STOCK_OFFSET = 570
+const BUY_ONE_OFFSET = 705
+const BUY_ALL_OFFSET = 818
+const DIVIDER2_OFFSET = 1095
+const BASIS_OFFSET = 1140
+const INVENTORY_OFFSET = 1350
+const SELL_ONE_OFFSET = 1485
+const SELL_ALL_OFFSET = 1598
 
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
@@ -97,42 +100,65 @@ export class MarketScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.scene.start('MapScene'))
 
+    const availableWidth = this.scale.width - TABLE_MARGIN * 2
+    const tableWidth = Math.min(DESIGN_TABLE_WIDTH, availableWidth)
+    const columnScale = tableWidth / DESIGN_TABLE_WIDTH
+    const tableLeft = (this.scale.width - tableWidth) / 2
+    const tableRight = tableLeft + tableWidth
+
+    const nameX = tableLeft + NAME_OFFSET * columnScale
+    const divider1X = tableLeft + DIVIDER1_OFFSET * columnScale
+    const priceX = tableLeft + PRICE_OFFSET * columnScale
+    const stockX = tableLeft + STOCK_OFFSET * columnScale
+    const buyOneX = tableLeft + BUY_ONE_OFFSET * columnScale
+    const buyAllX = tableLeft + BUY_ALL_OFFSET * columnScale
+    const divider2X = tableLeft + DIVIDER2_OFFSET * columnScale
+    const basisX = tableLeft + BASIS_OFFSET * columnScale
+    const inventoryX = tableLeft + INVENTORY_OFFSET * columnScale
+    const sellOneX = tableLeft + SELL_ONE_OFFSET * columnScale
+    const sellAllX = tableLeft + SELL_ALL_OFFSET * columnScale
+
+    // Font size and button padding shrink with the columns so buttons never
+    // overlap their neighbors on narrow windows.
+    const rowFontSize = `${Math.round(27 * columnScale)}px`
+    const buttonPadding = { x: Math.round(12 * columnScale), y: Math.round(6 * columnScale) }
+
     COMMODITIES.forEach((commodity, i) => {
       const y = ROW_START_Y + i * ROW_HEIGHT
 
       const rowBg = this.add
-        .rectangle(TABLE_LEFT, y - 9, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT, ROW_COLOR_EVEN)
+        .rectangle(tableLeft, y - 9, tableRight - tableLeft, ROW_HEIGHT, ROW_COLOR_EVEN)
         .setOrigin(0, 0)
       this.rowBackgrounds[commodity.id] = rowBg
 
-      const nameText = this.add.text(NAME_X, y, commodity.name, {
+      const nameText = this.add.text(nameX, y, commodity.name, {
         fontFamily: 'monospace',
-        fontSize: '27px',
+        fontSize: rowFontSize,
         color: '#ffffff',
       })
       this.nameTexts[commodity.id] = nameText
 
-      const priceText = this.add.text(PRICE_X, y, '', {
+      const priceText = this.add.text(priceX, y, '', {
         fontFamily: 'monospace',
-        fontSize: '27px',
+        fontSize: rowFontSize,
         color: '#cccccc',
       })
       this.priceTexts[commodity.id] = priceText
 
-      const stockText = this.add.text(STOCK_X, y, '', {
+      const stockText = this.add.text(stockX, y, '', {
         fontFamily: 'monospace',
-        fontSize: '27px',
+        fontSize: rowFontSize,
         color: '#cccccc',
       })
       this.stockTexts[commodity.id] = stockText
 
       const buyOneBtn = this.add
-        .text(BUY_ONE_X, y, 'Buy', {
+        .text(buyOneX, y, 'Buy', {
           fontFamily: 'monospace',
-          fontSize: '27px',
+          fontSize: rowFontSize,
           color: '#44ff88',
           backgroundColor: '#113322',
-          padding: { x: 12, y: 6 },
+          padding: buttonPadding,
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -149,12 +175,12 @@ export class MarketScene extends Phaser.Scene {
       this.buyOneButtons[commodity.id] = buyOneBtn
 
       const buyAllBtn = this.add
-        .text(BUY_ALL_X, y, 'All', {
+        .text(buyAllX, y, 'All', {
           fontFamily: 'monospace',
-          fontSize: '27px',
+          fontSize: rowFontSize,
           color: '#44ff88',
           backgroundColor: '#113322',
-          padding: { x: 12, y: 6 },
+          padding: buttonPadding,
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -165,27 +191,27 @@ export class MarketScene extends Phaser.Scene {
         })
       this.buyAllButtons[commodity.id] = buyAllBtn
 
-      const basisText = this.add.text(BASIS_X, y, '', {
+      const basisText = this.add.text(basisX, y, '', {
         fontFamily: 'monospace',
-        fontSize: '27px',
+        fontSize: rowFontSize,
         color: '#888888',
       })
       this.basisTexts[commodity.id] = basisText
 
-      const inventoryText = this.add.text(INVENTORY_X, y, '', {
+      const inventoryText = this.add.text(inventoryX, y, '', {
         fontFamily: 'monospace',
-        fontSize: '27px',
+        fontSize: rowFontSize,
         color: '#cccccc',
       })
       this.inventoryTexts[commodity.id] = inventoryText
 
       const sellOneBtn = this.add
-        .text(SELL_ONE_X, y, 'Sell', {
+        .text(sellOneX, y, 'Sell', {
           fontFamily: 'monospace',
-          fontSize: '27px',
+          fontSize: rowFontSize,
           color: '#ff8844',
           backgroundColor: '#332211',
-          padding: { x: 12, y: 6 },
+          padding: buttonPadding,
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -196,12 +222,12 @@ export class MarketScene extends Phaser.Scene {
       this.sellOneButtons[commodity.id] = sellOneBtn
 
       const sellAllBtn = this.add
-        .text(SELL_ALL_X, y, 'All', {
+        .text(sellAllX, y, 'All', {
           fontFamily: 'monospace',
-          fontSize: '27px',
+          fontSize: rowFontSize,
           color: '#ff8844',
           backgroundColor: '#332211',
-          padding: { x: 12, y: 6 },
+          padding: buttonPadding,
         })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -217,8 +243,8 @@ export class MarketScene extends Phaser.Scene {
       sellAllBtn.name = `sell-all-${commodity.id}`
     })
 
-    this.divider1 = this.add.rectangle(DIVIDER1_X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
-    this.divider2 = this.add.rectangle(DIVIDER2_X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
+    this.divider1 = this.add.rectangle(divider1X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
+    this.divider2 = this.add.rectangle(divider2X, ROW_START_Y - 9, 3, ROW_HEIGHT, 0x445566).setOrigin(0.5, 0)
 
     this.upgradeButton = this.add
       .text(this.scale.width / 2, ROW_START_Y + COMMODITIES.length * ROW_HEIGHT + 60, '', {
@@ -236,6 +262,15 @@ export class MarketScene extends Phaser.Scene {
       })
 
     this.refresh()
+
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this)
+    })
+  }
+
+  private handleResize() {
+    this.scene.restart()
   }
 
   private getTradeMultiplier(): number {
