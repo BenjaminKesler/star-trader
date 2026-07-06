@@ -20,13 +20,13 @@ const FUEL_UNITS = [
 
 /**
  * Formats "current/max" fuel. The unit (k, m, ...) is chosen from the max value,
- * so both numbers share it. Current keeps one decimal; max (always an even unit
- * amount by design) shows none.
+ * so both numbers share it. Current keeps one decimal unless it rounds clean
+ * (5.0k -> 5k); max (always an even unit amount by design) shows none.
  */
 function formatFuel(current: number, max: number): string {
   const unit = FUEL_UNITS.find((u) => max >= u.threshold)
   if (!unit) return `${Math.round(current)}/${Math.round(max)}`
-  const cur = (current / unit.threshold).toFixed(1)
+  const cur = (current / unit.threshold).toFixed(1).replace(/\.0$/, '')
   const mx = max / unit.threshold
   return `${cur}${unit.suffix}/${mx}${unit.suffix}`
 }
