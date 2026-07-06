@@ -3,6 +3,7 @@ import './style.css'
 import { BootScene } from './scenes/BootScene'
 import { MapScene } from './scenes/MapScene'
 import { MarketScene } from './scenes/MarketScene'
+import { FinancesScene } from './scenes/FinancesScene'
 import { ContractsScene, ShipyardScene, OutfitterScene, FuelDepotScene } from './scenes/PlaceholderScenes'
 
 new Phaser.Game({
@@ -14,5 +15,5 @@ new Phaser.Game({
   scale: {
     mode: Phaser.Scale.RESIZE,
   },
-  scene: [BootScene, MapScene, MarketScene, ContractsScene, ShipyardScene, OutfitterScene, FuelDepotScene],
+  scene: [BootScene, MapScene, MarketScene, FinancesScene, ContractsScene, ShipyardScene, OutfitterScene, FuelDepotScene],
 })

@@ -11,6 +11,7 @@ export const TABS: TabDef[] = [
   { label: 'Map', scene: 'MapScene' },
   { label: 'Market', scene: 'MarketScene' },
   { label: 'Contracts', scene: 'ContractsScene' },
+  { label: 'Finances', scene: 'FinancesScene' },
   { label: 'Shipyard', scene: 'ShipyardScene' },
   { label: 'Outfitter', scene: 'OutfitterScene' },
   { label: 'Fuel Depot', scene: 'FuelDepotScene' },
@@ -56,9 +57,8 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
     x += btn.width + 8
   }
 
-  const netWorth = Math.round(gameState.netWorth).toLocaleString()
   const companyName = scene.add
-    .text(scene.scale.width - 20, TAB_BAR_HEIGHT / 2, `${gameState.companyName}  NW: ${netWorth}cr`, {
+    .text(scene.scale.width - 20, TAB_BAR_HEIGHT / 2, `${gameState.companyName}  ${gameState.rank.name}`, {
       fontFamily: 'monospace',
       fontSize: '22px',
       color: '#ffffff',

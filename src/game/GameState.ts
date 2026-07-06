@@ -1,5 +1,6 @@
 import { COMMODITIES, type CommodityId } from '../data/commodities'
 import { SYSTEMS } from '../data/systems'
+import { rankForNetWorth, type Rank } from '../data/ranks'
 
 const GALAXY_RATE_MIN = 0.75
 const GALAXY_RATE_MAX = 1.5
@@ -99,6 +100,10 @@ class GameStateImpl {
       0,
     )
     return this.credits + cargoValue
+  }
+
+  get rank(): Rank {
+    return rankForNetWorth(this.netWorth)
   }
 
   canAfford(commodityId: CommodityId, qty: number): boolean {
