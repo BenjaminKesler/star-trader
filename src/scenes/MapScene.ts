@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
-import { createTabBar } from '../ui/TabBar'
+import { createTabBar, GALAXY_DATE_NAME } from '../ui/TabBar'
 
 const VIEW_PAD = 135
 /** Empty margin (world units) kept around the systems when bounding the camera. */
@@ -9,6 +9,8 @@ const MAP_PADDING = 300
 /** Pulls the default zoom out a bit so more of the map is visible around the current system. */
 const DEFAULT_ZOOM_FACTOR = 0.8
 const DRAG_CLICK_THRESHOLD = 6
+/** World units per second the travel marker moves along the route. */
+const TRAVEL_SPEED = 400
 
 /** Unit thresholds (largest first) used to abbreviate fuel amounts, e.g. 1000 -> "k". */
 const FUEL_UNITS = [
@@ -33,6 +35,11 @@ function formatFuel(current: number, max: number): string {
 
 export class MapScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera
+  private stationCircles: Phaser.GameObjects.Arc[] = []
+  private stationNames: Phaser.GameObjects.Text[] = []
+  private stationStatuses: Phaser.GameObjects.Text[] = []
+  private dateText?: Phaser.GameObjects.Text
   private homeZoom = 1
   private homeX = 0
   private homeY = 0
@@ -49,6 +56,8 @@ export class MapScene extends Phaser.Scene {
   }
 
   create() {
+    // A prior travel animation disables input; restarting the scene must re-enable it.
+    this.input.enabled = true
     this.cameras.main.setBackgroundColor('#000010')
 
     // Bound the camera to the systems' footprint, expanded to match the viewport's
@@ -86,14 +95,15 @@ export class MapScene extends Phaser.Scene {
     })
 
     const tabBar = createTabBar(this, this.scene.key)
+    this.dateText = tabBar.find((o) => o.name === GALAXY_DATE_NAME) as Phaser.GameObjects.Text
 
     // A dedicated screen-space camera keeps the HUD/title/tabs crisp and fixed
     // regardless of the main camera's zoom.
-    const uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height)
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height)
     this.cameras.main.ignore([this.hud, ...tabBar])
 
     const worldObjects = [...this.drawRoutes(zoom), ...this.drawStations(here, zoom)]
-    uiCamera.ignore(worldObjects)
+    this.uiCamera.ignore(worldObjects)
 
     this.refreshHud()
     this.setupCameraControls()
@@ -180,6 +190,10 @@ export class MapScene extends Phaser.Scene {
   private drawStations(here: StarSystem, zoom: number): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = []
     const markerScale = 1 / zoom
+    // Reset per-run (scene.restart reuses this instance without re-running field initializers).
+    this.stationCircles = []
+    this.stationNames = []
+    this.stationStatuses = []
 
     for (const system of SYSTEMS) {
       const isHere = system.id === here.id
@@ -192,6 +206,7 @@ export class MapScene extends Phaser.Scene {
       circle.setStrokeStyle(3, isHere || canTravel ? 0xffffff : 0x667788)
       circle.setScale(markerScale)
       objects.push(circle)
+      this.stationCircles.push(circle)
 
       const nameText = this.add
         .text(system.x, system.y - 60 * markerScale, system.name, {
@@ -202,6 +217,7 @@ export class MapScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScale(markerScale)
       objects.push(nameText)
+      this.stationNames.push(nameText)
 
       const statusLabel = isHere
         ? 'DOCKED'
@@ -219,6 +235,7 @@ export class MapScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScale(markerScale)
       objects.push(statusText)
+      this.stationStatuses.push(statusText)
 
       if (isHere) {
         circle.setInteractive({ useHandCursor: true })
@@ -228,9 +245,7 @@ export class MapScene extends Phaser.Scene {
       } else if (canTravel) {
         circle.setInteractive({ useHandCursor: true })
         circle.on('pointerdown', () => {
-          if (gameState.travelTo(system.id)) {
-            this.scene.restart()
-          }
+          this.startTravel(here, system, zoom)
         })
       }
     }
@@ -238,12 +253,72 @@ export class MapScene extends Phaser.Scene {
     return objects
   }
 
-  private refreshHud() {
+  /**
+   * Flies a green marker from the current system to the destination along the
+   * route at {@link TRAVEL_SPEED} world units/sec, then commits the jump. All
+   * input (other systems and the tab bar, which share this scene's input) is
+   * disabled for the duration so the player can't act mid-flight.
+   */
+  private startTravel(from: StarSystem, to: StarSystem, zoom: number) {
+    this.input.enabled = false
+
+    // Neutralize the map while in transit: every system goes gray and its
+    // status descriptor is hidden, leaving only the moving ship marker lit.
+    for (const circle of this.stationCircles) {
+      circle.setFillStyle(0x445566)
+      circle.setStrokeStyle(3, 0x667788)
+    }
+    for (const name of this.stationNames) {
+      name.setColor('#778899')
+    }
+    for (const status of this.stationStatuses) {
+      status.setVisible(false)
+    }
+
+    const markerScale = 1 / zoom
+    const traveler = this.add.circle(from.x, from.y, 9, 0x44ff88)
+    traveler.setStrokeStyle(2, 0xffffff)
+    traveler.setScale(markerScale)
+    this.uiCamera.ignore(traveler)
+
+    // Advance the top-bar galaxy date and HUD fuel in step with the ship's
+    // progress along the route, landing exactly on the values travelTo() will
+    // commit at arrival.
+    const startDate = gameState.galaxyDate
+    const dateDelta = gameState.jumpDateAdvance(to.id)
+    const startFuel = gameState.fuel
+    const fuelCost = gameState.jumpFuelCost(to.id)
+
+    const distance = Math.hypot(to.x - from.x, to.y - from.y)
+    this.tweens.add({
+      targets: traveler,
+      x: to.x,
+      y: to.y,
+      duration: (distance / TRAVEL_SPEED) * 1000,
+      ease: 'Linear',
+      onUpdate: (tween) => {
+        this.dateText?.setText(`GD ${gameState.formatGalaxyDate(startDate + dateDelta * tween.progress)}`)
+        this.refreshHud(startFuel - fuelCost * tween.progress)
+      },
+      onComplete: () => {
+        if (gameState.travelTo(to.id)) {
+          this.scene.restart()
+        } else {
+          // Guarded by canTravel already, but stay recoverable if it ever fails.
+          traveler.destroy()
+          this.input.enabled = true
+        }
+      },
+    })
+  }
+
+  /** `fuel` can be overridden to show an in-transit value that isn't committed yet. */
+  private refreshHud(fuel = gameState.fuel) {
     this.hud.setText(
       [
         `Ship: ${gameState.shipName}`,
         `Credits: ${gameState.credits.toLocaleString()}`,
-        `Fuel: ${formatFuel(gameState.fuel, gameState.maxFuel)}`,
+        `Fuel: ${formatFuel(fuel, gameState.maxFuel)}`,
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
       ].join('\n'),
     )

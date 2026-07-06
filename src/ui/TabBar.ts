@@ -17,6 +17,9 @@ export const TABS: TabDef[] = [
   { label: 'Fuel Depot', scene: 'FuelDepotScene' },
 ]
 
+/** Object name of the top-bar galaxy-date text, so scenes can find and update it live. */
+export const GALAXY_DATE_NAME = 'galaxyDate'
+
 /** Height of the top status bar. Content should start below this. */
 export const TOP_BAR_HEIGHT = 50
 /** Height of the bottom tab bar. Content should end above this. */
@@ -57,6 +60,8 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
         color: '#ffffff',
       })
       .setOrigin(0.5)
+    // The last segment is the galaxy date; name it so scenes can update it live (e.g. during travel).
+    if (i === segments.length - 1) seg.setName(GALAXY_DATE_NAME)
     objects.push(seg)
   })
 

@@ -112,12 +112,17 @@ class GameStateImpl {
     return rankForNetWorth(this.netWorth)
   }
 
-  /** The galaxy date as a "YEAR.DAY" stardate, e.g. "3200.001". */
-  get galaxyDateString(): string {
-    const totalDays = Math.floor(this.galaxyDate)
+  /** Formats a galaxy-date value as a "YEAR.DAY" stardate, e.g. "3200.001". */
+  formatGalaxyDate(date: number): string {
+    const totalDays = Math.floor(date)
     const year = GALAXY_EPOCH_YEAR + Math.floor(totalDays / DAYS_PER_YEAR)
     const day = (totalDays % DAYS_PER_YEAR) + 1
     return `${year}.${String(day).padStart(3, '0')}`
+  }
+
+  /** The current galaxy date as a "YEAR.DAY" stardate, e.g. "3200.001". */
+  get galaxyDateString(): string {
+    return this.formatGalaxyDate(this.galaxyDate)
   }
 
   canAfford(commodityId: CommodityId, qty: number): boolean {
@@ -169,6 +174,14 @@ class GameStateImpl {
     return Math.round(Math.hypot(to.x - from.x, to.y - from.y))
   }
 
+  /** Galaxy-date advance for a jump to systemId (fractional days), used both to
+   * commit the jump and to animate the clock while the ship is in transit. */
+  jumpDateAdvance(systemId: string, fromSystemId = this.currentSystemId): number {
+    const from = SYSTEMS.find((s) => s.id === fromSystemId)!
+    const to = SYSTEMS.find((s) => s.id === systemId)!
+    return Math.hypot(to.x - from.x, to.y - from.y) / GALAXY_DATE_DIVISOR
+  }
+
   travelTo(systemId: string): boolean {
     if (systemId === this.currentSystemId) return false
     const current = SYSTEMS.find((s) => s.id === this.currentSystemId)!
@@ -176,8 +189,7 @@ class GameStateImpl {
     const cost = this.jumpFuelCost(systemId)
     if (cost > this.fuel) return false
     this.fuel -= cost
-    const to = SYSTEMS.find((s) => s.id === systemId)!
-    this.galaxyDate += Math.hypot(to.x - current.x, to.y - current.y) / GALAXY_DATE_DIVISOR
+    this.galaxyDate += this.jumpDateAdvance(systemId)
     this.currentSystemId = systemId
     this.advanceMarketTick()
     return true
