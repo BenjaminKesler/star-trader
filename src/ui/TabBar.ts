@@ -56,8 +56,9 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
     x += btn.width + 8
   }
 
+  const netWorth = Math.round(gameState.netWorth).toLocaleString()
   const companyName = scene.add
-    .text(scene.scale.width - 20, TAB_BAR_HEIGHT / 2, gameState.companyName, {
+    .text(scene.scale.width - 20, TAB_BAR_HEIGHT / 2, `${gameState.companyName}  NW: ${netWorth}cr`, {
       fontFamily: 'monospace',
       fontSize: '22px',
       color: '#ffffff',

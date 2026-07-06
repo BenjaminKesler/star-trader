@@ -239,15 +239,12 @@ export class MapScene extends Phaser.Scene {
   }
 
   private refreshHud() {
-    const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
     this.hud.setText(
       [
         `Ship: ${gameState.shipName}`,
-        `Location: ${here.name}`,
         `Credits: ${gameState.credits.toLocaleString()}`,
         `Fuel: ${formatFuel(gameState.fuel, gameState.maxFuel)}`,
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
-        `Net worth: ${Math.round(gameState.netWorth).toLocaleString()}`,
       ].join('\n'),
     )
   }
