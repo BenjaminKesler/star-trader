@@ -6,7 +6,7 @@ export interface TabDef {
   scene: string
 }
 
-/** The always-visible top navigation. Each entry maps a label to a scene key. */
+/** The tabs shown in the bottom bar. Each entry maps a label to a scene key. */
 export const TABS: TabDef[] = [
   { label: 'Map', scene: 'MapScene' },
   { label: 'Market', scene: 'MarketScene' },
@@ -17,26 +17,60 @@ export const TABS: TabDef[] = [
   { label: 'Fuel Depot', scene: 'FuelDepotScene' },
 ]
 
-/** Height of the tab strip in screen pixels. Content should start below this. */
-export const TAB_BAR_HEIGHT = 50
+/** Height of the top status bar. Content should start below this. */
+export const TOP_BAR_HEIGHT = 50
+/** Height of the bottom tab bar. Content should end above this. */
+export const BOTTOM_BAR_HEIGHT = 50
+/** @deprecated Alias for {@link TOP_BAR_HEIGHT}; content still offsets from the top bar. */
+export const TAB_BAR_HEIGHT = TOP_BAR_HEIGHT
 
 /**
- * Adds the top tab bar to a scene and returns every object created, so callers
- * with a separate world camera (e.g. MapScene) can add them to its ignore list.
- * The active tab is highlighted and non-interactive; the rest switch scenes.
+ * Adds the persistent chrome (top status bar + bottom tab bar) to a scene and
+ * returns every object created, so callers with a separate world camera (e.g.
+ * MapScene) can add them to its ignore list. The top bar shows the galaxy date
+ * and company; the bottom bar holds the tabs, with the active one highlighted
+ * and non-interactive and the rest switching scenes.
  */
 export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.GameObjects.GameObject[] {
   const objects: Phaser.GameObjects.GameObject[] = []
+  const width = scene.scale.width
+  const height = scene.scale.height
 
-  const bg = scene.add.rectangle(0, 0, scene.scale.width, TAB_BAR_HEIGHT, 0x0a1020).setOrigin(0, 0)
-  const border = scene.add.rectangle(0, TAB_BAR_HEIGHT, scene.scale.width, 2, 0x223344).setOrigin(0, 0)
-  objects.push(bg, border)
+  // --- Top status bar: four equally-spaced segments ---
+  const topBg = scene.add.rectangle(0, 0, width, TOP_BAR_HEIGHT, 0x0a1020).setOrigin(0, 0)
+  const topBorder = scene.add.rectangle(0, TOP_BAR_HEIGHT, width, 2, 0x223344).setOrigin(0, 0)
+  objects.push(topBg, topBorder)
+
+  const segments = [
+    gameState.companyName,
+    `Rank ${gameState.rank.name}`,
+    `${gameState.credits.toLocaleString()}cr`,
+    `GD ${gameState.galaxyDateString}`,
+  ]
+  // Center each segment in one of four equal-width columns, so the four pieces
+  // are evenly spaced with matching half-gaps at each edge.
+  segments.forEach((text, i) => {
+    const seg = scene.add
+      .text((width * (2 * i + 1)) / (segments.length * 2), TOP_BAR_HEIGHT / 2, text, {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+    objects.push(seg)
+  })
+
+  // --- Bottom tab bar ---
+  const bottomTop = height - BOTTOM_BAR_HEIGHT
+  const bottomBg = scene.add.rectangle(0, bottomTop, width, BOTTOM_BAR_HEIGHT, 0x0a1020).setOrigin(0, 0)
+  const bottomBorder = scene.add.rectangle(0, bottomTop - 2, width, 2, 0x223344).setOrigin(0, 0)
+  objects.push(bottomBg, bottomBorder)
 
   let x = 20
   for (const tab of TABS) {
     const isActive = tab.scene === activeScene
     const btn = scene.add
-      .text(x, TAB_BAR_HEIGHT / 2, tab.label, {
+      .text(x, bottomTop + BOTTOM_BAR_HEIGHT / 2, tab.label, {
         fontFamily: 'monospace',
         fontSize: '22px',
         color: isActive ? '#ffffff' : '#7a8ba0',
@@ -56,15 +90,6 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
     objects.push(btn)
     x += btn.width + 8
   }
-
-  const companyName = scene.add
-    .text(scene.scale.width - 20, TAB_BAR_HEIGHT / 2, `${gameState.companyName}  ${gameState.rank.name}`, {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      color: '#ffffff',
-    })
-    .setOrigin(1, 0.5)
-  objects.push(companyName)
 
   return objects
 }

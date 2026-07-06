@@ -20,6 +20,11 @@ const OTHER_STOCK_MAX = 40
 const CARGO_UPGRADE_STEP = 20
 const CARGO_UPGRADE_BASE_COST = 600
 
+/** Each jump advances the galaxy date by its straight-line distance over this. */
+const GALAXY_DATE_DIVISOR = 150
+const GALAXY_EPOCH_YEAR = 3200
+const DAYS_PER_YEAR = 365
+
 type RateTable = Record<string, Record<CommodityId, number>>
 type CargoHold = Record<CommodityId, number>
 
@@ -47,6 +52,7 @@ class GameStateImpl {
   fuel = 5000
   maxFuel = 5000
   currentSystemId = SYSTEMS[0].id
+  galaxyDate = 0
   cargoCapacity = CARGO_UPGRADE_STEP
   cargoUpgradeLevel = 0
   cargo: CargoHold = emptyCargo()
@@ -106,6 +112,14 @@ class GameStateImpl {
     return rankForNetWorth(this.netWorth)
   }
 
+  /** The galaxy date as a "YEAR.DAY" stardate, e.g. "3200.001". */
+  get galaxyDateString(): string {
+    const totalDays = Math.floor(this.galaxyDate)
+    const year = GALAXY_EPOCH_YEAR + Math.floor(totalDays / DAYS_PER_YEAR)
+    const day = (totalDays % DAYS_PER_YEAR) + 1
+    return `${year}.${String(day).padStart(3, '0')}`
+  }
+
   canAfford(commodityId: CommodityId, qty: number): boolean {
     return this.getPrice(commodityId) * qty <= this.credits
   }
@@ -162,6 +176,8 @@ class GameStateImpl {
     const cost = this.jumpFuelCost(systemId)
     if (cost > this.fuel) return false
     this.fuel -= cost
+    const to = SYSTEMS.find((s) => s.id === systemId)!
+    this.galaxyDate += Math.hypot(to.x - current.x, to.y - current.y) / GALAXY_DATE_DIVISOR
     this.currentSystemId = systemId
     this.advanceMarketTick()
     return true
