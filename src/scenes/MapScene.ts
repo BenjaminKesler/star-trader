@@ -1,10 +1,10 @@
 import Phaser from 'phaser'
-import { MAP_HEIGHT, MAP_WIDTH, MAX_JUMP_DIST, SYSTEMS, type StarSystem } from '../data/systems'
+import { MAP_HEIGHT, MAP_WIDTH, ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
 
 const VIEW_PAD = 135
-const MIN_ZOOM_FACTOR = 0.5
-const MAX_ZOOM_FACTOR = 4
+/** Pulls the default zoom out a bit so more of the map is visible around the current system. */
+const DEFAULT_ZOOM_FACTOR = 0.8
 const DRAG_CLICK_THRESHOLD = 6
 
 export class MapScene extends Phaser.Scene {
@@ -30,11 +30,12 @@ export class MapScene extends Phaser.Scene {
 
     // Zoom is fixed from the graph's max jump distance (not the current system),
     // so every system frames its neighbors the same consistent way.
-    const zoom = Math.min(this.scale.width / 2 / (MAX_JUMP_DIST + VIEW_PAD), this.scale.height / 2 / (MAX_JUMP_DIST + VIEW_PAD), 1)
+    const zoom = Math.min(this.scale.width / 2 / (ZOOM_FRAME_DIST + VIEW_PAD), this.scale.height / 2 / (ZOOM_FRAME_DIST + VIEW_PAD), 1) * DEFAULT_ZOOM_FACTOR
     this.cameras.main.setZoom(zoom)
     this.homeZoom = zoom
-    this.minZoom = zoom * MIN_ZOOM_FACTOR
-    this.maxZoom = zoom * MAX_ZOOM_FACTOR
+    // Don't allow zooming in past the default; allow zooming out until the whole galaxy fits on screen.
+    this.maxZoom = zoom
+    this.minZoom = Math.min(this.scale.width / MAP_WIDTH, this.scale.height / MAP_HEIGHT)
 
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
     this.cameras.main.centerOn(here.x, here.y)
@@ -84,11 +85,13 @@ export class MapScene extends Phaser.Scene {
       const newZoom = Phaser.Math.Clamp(oldZoom * (dy > 0 ? 0.9 : 1.1), this.minZoom, this.maxZoom)
       if (newZoom === oldZoom) return
 
+      // Keep the world point under the cursor anchored while zooming, so the
+      // pointer stays the focal point. Computed directly instead of via a second
+      // getWorldPoint call, whose camera matrix wouldn't reflect the new zoom yet.
       const worldPoint = cam.getWorldPoint(pointer.x, pointer.y)
       cam.setZoom(newZoom)
-      const newWorldPoint = cam.getWorldPoint(pointer.x, pointer.y)
-      cam.scrollX += worldPoint.x - newWorldPoint.x
-      cam.scrollY += worldPoint.y - newWorldPoint.y
+      cam.scrollX = worldPoint.x - cam.width / 2 - (pointer.x - cam.width / 2) / newZoom
+      cam.scrollY = worldPoint.y - cam.height / 2 - (pointer.y - cam.height / 2) / newZoom
     })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
