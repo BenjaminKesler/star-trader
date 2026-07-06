@@ -43,6 +43,8 @@ class GameStateImpl {
   companyName = 'Unnamed Trading Co.'
   shipName = 'Rusty Hauler'
   credits = 1000
+  fuel = 5000
+  maxFuel = 5000
   currentSystemId = SYSTEMS[0].id
   cargoCapacity = CARGO_UPGRADE_STEP
   cargoUpgradeLevel = 0
@@ -142,10 +144,19 @@ class GameStateImpl {
     return true
   }
 
+  jumpFuelCost(systemId: string, fromSystemId = this.currentSystemId): number {
+    const from = SYSTEMS.find((s) => s.id === fromSystemId)!
+    const to = SYSTEMS.find((s) => s.id === systemId)!
+    return Math.round(Math.hypot(to.x - from.x, to.y - from.y))
+  }
+
   travelTo(systemId: string): boolean {
     if (systemId === this.currentSystemId) return false
     const current = SYSTEMS.find((s) => s.id === this.currentSystemId)!
     if (!current.connections.includes(systemId)) return false
+    const cost = this.jumpFuelCost(systemId)
+    if (cost > this.fuel) return false
+    this.fuel -= cost
     this.currentSystemId = systemId
     this.advanceMarketTick()
     return true

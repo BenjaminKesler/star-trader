@@ -10,6 +10,27 @@ const MAP_PADDING = 300
 const DEFAULT_ZOOM_FACTOR = 0.8
 const DRAG_CLICK_THRESHOLD = 6
 
+/** Unit thresholds (largest first) used to abbreviate fuel amounts, e.g. 1000 -> "k". */
+const FUEL_UNITS = [
+  { threshold: 1e12, suffix: 't' },
+  { threshold: 1e9, suffix: 'b' },
+  { threshold: 1e6, suffix: 'm' },
+  { threshold: 1e3, suffix: 'k' },
+]
+
+/**
+ * Formats "current/max" fuel. The unit (k, m, ...) is chosen from the max value,
+ * so both numbers share it. Current keeps one decimal; max (always an even unit
+ * amount by design) shows none.
+ */
+function formatFuel(current: number, max: number): string {
+  const unit = FUEL_UNITS.find((u) => max >= u.threshold)
+  if (!unit) return `${Math.round(current)}/${Math.round(max)}`
+  const cur = (current / unit.threshold).toFixed(1)
+  const mx = max / unit.threshold
+  return `${cur}${unit.suffix}/${mx}${unit.suffix}`
+}
+
 export class MapScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
   private homeZoom = 1
@@ -163,10 +184,12 @@ export class MapScene extends Phaser.Scene {
     for (const system of SYSTEMS) {
       const isHere = system.id === here.id
       const isReachable = here.connections.includes(system.id)
-      const fillColor = isHere ? 0x44ff88 : isReachable ? 0x4488ff : 0x445566
+      const hasFuel = isReachable && gameState.jumpFuelCost(system.id) <= gameState.fuel
+      const canTravel = isReachable && hasFuel
+      const fillColor = isHere ? 0x44ff88 : canTravel ? 0x4488ff : 0x445566
 
       const circle = this.add.circle(system.x, system.y, 16, fillColor)
-      circle.setStrokeStyle(3, isReachable || isHere ? 0xffffff : 0x667788)
+      circle.setStrokeStyle(3, isHere || canTravel ? 0xffffff : 0x667788)
       circle.setScale(markerScale)
       objects.push(circle)
 
@@ -174,18 +197,24 @@ export class MapScene extends Phaser.Scene {
         .text(system.x, system.y - 60 * markerScale, system.name, {
           fontFamily: 'monospace',
           fontSize: '21px',
-          color: isReachable || isHere ? '#ffffff' : '#778899',
+          color: isHere || canTravel ? '#ffffff' : '#778899',
         })
         .setOrigin(0.5)
         .setScale(markerScale)
       objects.push(nameText)
 
-      const statusLabel = isHere ? 'DOCKED' : isReachable ? 'Travel' : 'Too Far'
+      const statusLabel = isHere
+        ? 'DOCKED'
+        : canTravel
+          ? 'Travel'
+          : isReachable
+            ? 'Not Enough Fuel'
+            : 'Too Far'
       const statusText = this.add
         .text(system.x, system.y + 51 * markerScale, statusLabel, {
           fontFamily: 'monospace',
           fontSize: '18px',
-          color: isHere ? '#44ff88' : isReachable ? '#aaaaaa' : '#556677',
+          color: isHere ? '#44ff88' : canTravel ? '#aaaaaa' : '#556677',
         })
         .setOrigin(0.5)
         .setScale(markerScale)
@@ -196,7 +225,7 @@ export class MapScene extends Phaser.Scene {
         circle.on('pointerdown', () => {
           this.scene.start('MarketScene')
         })
-      } else if (isReachable) {
+      } else if (canTravel) {
         circle.setInteractive({ useHandCursor: true })
         circle.on('pointerdown', () => {
           if (gameState.travelTo(system.id)) {
@@ -216,6 +245,7 @@ export class MapScene extends Phaser.Scene {
         `Ship: ${gameState.shipName}`,
         `Location: ${here.name}`,
         `Credits: ${gameState.credits.toLocaleString()}`,
+        `Fuel: ${formatFuel(gameState.fuel, gameState.maxFuel)}`,
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
         `Net worth: ${Math.round(gameState.netWorth).toLocaleString()}`,
       ].join('\n'),
