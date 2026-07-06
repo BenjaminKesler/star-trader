@@ -11,6 +11,9 @@ const DEFAULT_ZOOM_FACTOR = 0.8
 const DRAG_CLICK_THRESHOLD = 6
 /** World units per second the travel marker moves along the route. */
 const TRAVEL_SPEED = 400
+/** Inner padding (screen px) between the hover flyout's text and its border. */
+const FLYOUT_PAD_X = 12
+const FLYOUT_PAD_Y = 8
 
 /** Unit thresholds (largest first) used to abbreviate fuel amounts, e.g. 1000 -> "k". */
 const FUEL_UNITS = [
@@ -40,6 +43,9 @@ export class MapScene extends Phaser.Scene {
   private stationNames: Phaser.GameObjects.Text[] = []
   private stationStatuses: Phaser.GameObjects.Text[] = []
   private dateText?: Phaser.GameObjects.Text
+  private flyout!: Phaser.GameObjects.Container
+  private flyoutBg!: Phaser.GameObjects.Rectangle
+  private flyoutText!: Phaser.GameObjects.Text
   private homeZoom = 1
   private homeX = 0
   private homeY = 0
@@ -97,10 +103,12 @@ export class MapScene extends Phaser.Scene {
     const tabBar = createTabBar(this, this.scene.key)
     this.dateText = tabBar.find((o) => o.name === GALAXY_DATE_NAME) as Phaser.GameObjects.Text
 
+    const flyout = this.createFlyout()
+
     // A dedicated screen-space camera keeps the HUD/title/tabs crisp and fixed
     // regardless of the main camera's zoom.
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height)
-    this.cameras.main.ignore([this.hud, ...tabBar])
+    this.cameras.main.ignore([this.hud, flyout, ...tabBar])
 
     const worldObjects = [...this.drawRoutes(zoom), ...this.drawStations(here, zoom)]
     this.uiCamera.ignore(worldObjects)
@@ -247,6 +255,8 @@ export class MapScene extends Phaser.Scene {
         circle.on('pointerdown', () => {
           this.startTravel(here, system, zoom)
         })
+        circle.on('pointerover', () => this.showFlyout(system))
+        circle.on('pointerout', () => this.hideFlyout())
       }
     }
 
@@ -261,6 +271,7 @@ export class MapScene extends Phaser.Scene {
    */
   private startTravel(from: StarSystem, to: StarSystem, zoom: number) {
     this.input.enabled = false
+    this.hideFlyout()
 
     // Neutralize the map while in transit: every system goes gray and its
     // status descriptor is hidden, leaving only the moving ship marker lit.
@@ -312,12 +323,54 @@ export class MapScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * Builds the (initially hidden) hover flyout: a bordered panel whose bordered
+   * background is sized to the text in {@link showFlyout}. Lives in screen space
+   * (rendered by the UI camera) so it stays crisp regardless of map zoom.
+   */
+  private createFlyout(): Phaser.GameObjects.Container {
+    const bg = this.add.rectangle(0, 0, 10, 10, 0x0a1420, 0.95).setOrigin(0, 0.5)
+    bg.setStrokeStyle(1.5, 0x4488ff, 0.9)
+    const text = this.add
+      .text(FLYOUT_PAD_X, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#cfefff',
+      })
+      .setOrigin(0, 0.5)
+    this.flyoutBg = bg
+    this.flyoutText = text
+    this.flyout = this.add.container(0, 0, [bg, text]).setDepth(1000).setVisible(false)
+    return this.flyout
+  }
+
+  /** Shows the travel-cost flyout beside the given (travelable) system. */
+  private showFlyout(system: StarSystem) {
+    const days = Math.max(1, Math.round(gameState.jumpDateAdvance(system.id)))
+    const fuel = gameState.jumpFuelCost(system.id)
+    this.flyoutText.setText([
+      system.name,
+      `${days} day${days === 1 ? '' : 's'}`,
+      `${fuel.toLocaleString()} fuel`,
+    ].join('\n'))
+    this.flyoutBg.setSize(this.flyoutText.width + FLYOUT_PAD_X * 2, this.flyoutText.height + FLYOUT_PAD_Y * 2)
+
+    // Anchor to the system's on-screen position (world -> screen via the main camera).
+    const cam = this.cameras.main
+    const screenX = (system.x - cam.worldView.x) * cam.zoom
+    const screenY = (system.y - cam.worldView.y) * cam.zoom
+    this.flyout.setPosition(screenX + 26, screenY).setVisible(true)
+  }
+
+  private hideFlyout() {
+    this.flyout.setVisible(false)
+  }
+
   /** `fuel` can be overridden to show an in-transit value that isn't committed yet. */
   private refreshHud(fuel = gameState.fuel) {
     this.hud.setText(
       [
         `Ship: ${gameState.shipName}`,
-        `Credits: ${gameState.credits.toLocaleString()}`,
         `Fuel: ${formatFuel(fuel, gameState.maxFuel)}`,
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
       ].join('\n'),
