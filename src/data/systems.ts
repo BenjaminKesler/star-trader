@@ -19,9 +19,6 @@ export const MAX_JUMP_DIST = 1350
 /** Reference distance the default camera zoom frames around. Smaller than the actual jump cap, so neighbors can sit offscreen and be reached by scrolling. */
 export const ZOOM_FRAME_DIST = 450
 
-export const MAP_WIDTH = 6750
-export const MAP_HEIGHT = 5700
-
 export const SYSTEMS: StarSystem[] = [
   {
     id: 'verdant-fields',

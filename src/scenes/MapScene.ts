@@ -1,8 +1,10 @@
 import Phaser from 'phaser'
-import { MAP_HEIGHT, MAP_WIDTH, ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
+import { ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
 
 const VIEW_PAD = 135
+/** Empty margin (world units) kept around the systems when bounding the camera. */
+const MAP_PADDING = 300
 /** Pulls the default zoom out a bit so more of the map is visible around the current system. */
 const DEFAULT_ZOOM_FACTOR = 0.8
 const DRAG_CLICK_THRESHOLD = 6
@@ -26,7 +28,20 @@ export class MapScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor('#000010')
-    this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT)
+
+    // Bound the camera to the systems' footprint, expanded to match the viewport's
+    // aspect ratio around the cluster center. This keeps the cluster centered when
+    // fully zoomed out (Phaser's own bounds clamp only centers the binding axis).
+    const xs = SYSTEMS.map((s) => s.x)
+    const ys = SYSTEMS.map((s) => s.y)
+    const centerX = (Math.min(...xs) + Math.max(...xs)) / 2
+    const centerY = (Math.min(...ys) + Math.max(...ys)) / 2
+    let halfW = (Math.max(...xs) - Math.min(...xs)) / 2 + MAP_PADDING
+    let halfH = (Math.max(...ys) - Math.min(...ys)) / 2 + MAP_PADDING
+    const viewAspect = this.scale.width / this.scale.height
+    if (halfW / halfH < viewAspect) halfW = halfH * viewAspect
+    else halfH = halfW / viewAspect
+    this.cameras.main.setBounds(centerX - halfW, centerY - halfH, halfW * 2, halfH * 2)
 
     // Zoom is fixed from the graph's max jump distance (not the current system),
     // so every system frames its neighbors the same consistent way.
@@ -35,7 +50,7 @@ export class MapScene extends Phaser.Scene {
     this.homeZoom = zoom
     // Don't allow zooming in past the default; allow zooming out until the whole galaxy fits on screen.
     this.maxZoom = zoom
-    this.minZoom = Math.min(this.scale.width / MAP_WIDTH, this.scale.height / MAP_HEIGHT)
+    this.minZoom = Math.min(this.scale.width / (halfW * 2), this.scale.height / (halfH * 2))
 
     const here = SYSTEMS.find((s) => s.id === gameState.currentSystemId)!
     this.cameras.main.centerOn(here.x, here.y)
