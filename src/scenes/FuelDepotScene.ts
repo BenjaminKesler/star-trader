@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { gameState } from '../game/GameState'
-import { createTabBar, TOP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
+import { createTabBar, CREDITS_NAME, TOP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
 
 /**
  * Fuel Depot page. For now this offers a single flat-rate refuel: pay a small
@@ -65,6 +65,10 @@ export class FuelDepotScene extends Phaser.Scene {
 
   private refresh() {
     this.fuelText.setText(`Fuel: ${gameState.fuel} / ${gameState.maxFuel}`)
+
+    // Keep the top status bar's credits in sync after a refuel.
+    const topBarCredits = this.children.getByName(CREDITS_NAME) as Phaser.GameObjects.Text | null
+    topBarCredits?.setText(`${gameState.credits.toLocaleString()}cr`)
 
     this.refuelButton.setText(`Refuel — ${gameState.refuelCost().toLocaleString()}cr`)
 

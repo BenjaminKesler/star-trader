@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { COMMODITIES, type Commodity } from '../data/commodities'
 import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
-import { BOTTOM_BAR_HEIGHT, createTabBar } from '../ui/TabBar'
+import { BOTTOM_BAR_HEIGHT, CREDITS_NAME, createTabBar } from '../ui/TabBar'
 import { formatDelta } from '../ui/format'
 
 const ROW_HEIGHT = 60
@@ -420,6 +420,10 @@ export class MarketScene extends Phaser.Scene {
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
       ].join('  |  '),
     )
+
+    // Keep the top status bar's credits in sync with the ones shown here.
+    const topBarCredits = this.children.getByName(CREDITS_NAME) as Phaser.GameObjects.Text | null
+    topBarCredits?.setText(`${gameState.credits.toLocaleString()}cr`)
 
     const visible = this.visibleCommodities()
     this.scrollRow = Phaser.Math.Clamp(this.scrollRow, 0, this.maxScrollRow(visible.length))
