@@ -87,7 +87,7 @@ export class MarketScene extends Phaser.Scene {
     createTabBar(this, this.scene.key)
 
     this.add
-      .text(this.scale.width / 2, 75, `${here.name} Market — Pop. ${formatPopulation(here.population)}`, {
+      .text(this.scale.width / 2, 75, `${here.name} Market — Pop. ${formatPopulation(gameState.getPopulation(here.id))}`, {
         fontFamily: 'monospace',
         fontSize: '36px',
         color: '#ffffff',

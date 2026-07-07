@@ -2,15 +2,75 @@ import { COMMODITIES, type CommodityId } from '../data/commodities'
 import { SYSTEMS, type StarSystem } from '../data/systems'
 import { rankForNetWorth, type Rank } from '../data/ranks'
 
-const GALAXY_RATE_MIN = 0.75
-const GALAXY_RATE_MAX = 1.5
+const GALAXY_RATE_MIN = 0.85
+const GALAXY_RATE_MAX = 1.3
 const LOCAL_RATE_MIN = 0.75
 const LOCAL_RATE_MAX = 1.25
 
 const BOOM_CRASH_CHANCE = 0.12
-const SMALL_MOVE_RANGE = 0.05
-const BOOM_CRASH_RANGE = 0.25
+const SMALL_MOVE_RANGE = 0.03
+const BOOM_CRASH_RANGE = 0.15
 const MEAN_REVERSION = 0.05
+
+// --- Local supply pressure ---
+// Each day a system's local rate is nudged by how much of the commodity it holds,
+// relative to its storage cap: a well-stocked market drifts cheaper, a bare one
+// drifts pricier. The nudge is capped at LOCAL_SUPPLY_SWING per day either way.
+const LOCAL_SUPPLY_SWING = 0.03
+/** Fill fraction at which supply pressure is neutral; above it prices soften, below it they firm. */
+const LOCAL_SUPPLY_NEUTRAL_FILL = 0.1
+
+// --- Population migration ---
+// People drift between systems in slow waves. Each wave moves a share of its
+// source's population to a destination over one-to-two years, following an
+// S-curve: the flow starts as a trickle, swells to a peak, then tapers off.
+/** Chance per day that a fresh migration wave begins, while under the active cap. */
+const MIGRATION_SPAWN_CHANCE = 0.02
+/** Most migration waves that can be underway at once. */
+const MAX_ACTIVE_MIGRATIONS = 6
+/** Fraction of a source system's population a single wave relocates over its life. */
+const MIGRATION_POP_FRACTION_MIN = 0.02
+const MIGRATION_POP_FRACTION_MAX = 0.08
+/** A wave plays out over this many days — a slow one-to-two-year swing. */
+const MIGRATION_DURATION_MIN = 365
+const MIGRATION_DURATION_MAX = 730
+/** A system never migrates below this floor, in millions. */
+const MIGRATION_MIN_POP = 1
+/** Destination tilt: the wealthiest system is at most (1 + this)× as attractive as the poorest. */
+const MIGRATION_PROSPERITY_TILT = 0.5
+
+// --- Organic galaxy growth ---
+// The galaxy's headcount creeps upward, but only as fast as its wealth allows:
+// growth runs at its peak rate while wealth-per-capita holds at the opening
+// baseline and throttles toward zero as population outruns that wealth.
+/** Peak galaxy-wide annual growth, reached only when wealth-per-capita is at baseline. */
+const MAX_ANNUAL_GROWTH = 0.008
+
+// --- Migration momentum, trend & price impact ---
+/** EMA weight on each day's net migration; smooths the per-system trend signal. */
+const MOMENTUM_SMOOTHING = 0.1
+/** |per-day net-migration fraction| below this reads as a steady population (no arrow). */
+const POP_TREND_FLAT = 8e-6
+/** Turns a system's per-day net-migration fraction into a local-price nudge. */
+const MIGRATION_PRICE_SENSITIVITY = 100
+/** Hard cap on that per-day migration price nudge, in rate units. */
+const MIGRATION_PRICE_CAP = 0.02
+
+// --- Player footprint on the galaxy ---
+// Trading in a system leaves a decaying mark of "economic vibrancy" there, which
+// draws migrants. The pull is scaled by the player's prominence, so it is barely
+// perceptible while the player is small and grows to reshape the galaxy late-game.
+/** Days for a system's accumulated player trade influence to halve. */
+const PLAYER_INFLUENCE_HALFLIFE = 180
+/** Net worth at which the player is "half" as prominent as they will ever effectively be. */
+const PLAYER_PROMINENCE_HALF = 200_000
+/**
+ * At full prominence, the player can steer a migration "budget" worth this many×
+ * the galaxy's entire baseline pull toward the systems they trade in — enough,
+ * late-game, to grow a favoured system into a boomtown. Scaled by prominence, so
+ * it is imperceptible early on.
+ */
+const PLAYER_PULL_SHARE = 1.5
 
 // --- Initial stock seeding ---
 /** A fresh system stocks its own good plus this many randomly chosen imports. */
@@ -70,13 +130,53 @@ function pickDistinct<T>(items: T[], count: number): T[] {
   return picked
 }
 
-function stepRate(current: number, min: number, max: number): number {
+function stepRate(current: number, min: number, max: number, bias = 0): number {
   const isBoomOrCrash = Math.random() < BOOM_CRASH_CHANCE
   const range = isBoomOrCrash ? BOOM_CRASH_RANGE : SMALL_MOVE_RANGE
   const delta = (Math.random() * 2 - 1) * range
   const reversion = (1 - current) * MEAN_REVERSION
-  const next = current + delta + reversion
+  const next = current + delta + reversion + bias
   return Math.min(max, Math.max(min, next))
+}
+
+/**
+ * Per-day price pressure from a system's stock of a commodity: markets holding a
+ * glut drift cheaper, bare markets drift pricier. Bounded to ±LOCAL_SUPPLY_SWING.
+ */
+function supplyBias(fillFraction: number): number {
+  const raw = (1 - fillFraction / LOCAL_SUPPLY_NEUTRAL_FILL) * LOCAL_SUPPLY_SWING
+  return Math.min(LOCAL_SUPPLY_SWING, Math.max(-LOCAL_SUPPLY_SWING, raw))
+}
+
+/** Smoothstep S-curve: 0 at t≤0, 1 at t≥1, with a flat (zero-slope) start and end. */
+function smoothstep(t: number): number {
+  const c = Math.min(1, Math.max(0, t))
+  return c * c * (3 - 2 * c)
+}
+
+/** Picks one item at random, each item's odds proportional to its weight. */
+function weightedPick<T>(items: T[], weights: number[]): T {
+  const total = weights.reduce((sum, w) => sum + w, 0)
+  let roll = Math.random() * total
+  for (let i = 0; i < items.length; i++) {
+    roll -= weights[i]
+    if (roll <= 0) return items[i]
+  }
+  return items[items.length - 1]
+}
+
+/** One in-progress migration wave: a share of `from`'s people relocating to `to`. */
+interface Migration {
+  from: string
+  to: string
+  /** Total population, in millions, the wave will relocate over its whole life. */
+  total: number
+  /** Galaxy-day the wave began. */
+  startDay: number
+  /** Length of the wave in days. */
+  durationDays: number
+  /** Population moved so far, in millions; tracked so the S-curve stays exact. */
+  moved: number
 }
 
 class GameStateImpl {
@@ -97,12 +197,25 @@ class GameStateImpl {
   galaxyRates: Record<CommodityId, number> = {} as Record<CommodityId, number>
   localRates: RateTable = {}
   stock: RateTable = {}
+  /** Live resident population per system, in millions; seeded from each system's authored value. */
+  populations: Record<string, number> = {}
+  /** Migration waves currently moving people between systems. */
+  private migrations: Migration[] = []
+  /** Opening galaxy wealth-per-capita; organic growth is throttled against this. */
+  private baselineWorthPerCapita = 1
+  /** EMA of each system's daily net migration (millions/day, + = inflow); drives trend arrows and price. */
+  private migrationMomentum: Record<string, number> = {}
+  /** Decaying record of how much the player has traded in each system. */
+  private playerInfluence: Record<string, number> = {}
 
   constructor() {
     for (const commodity of COMMODITIES) {
       this.galaxyRates[commodity.id] = 1
     }
     for (const system of SYSTEMS) {
+      this.populations[system.id] = system.population
+      this.migrationMomentum[system.id] = 0
+      this.playerInfluence[system.id] = 0
       this.localRates[system.id] = {} as Record<CommodityId, number>
       this.stock[system.id] = {} as Record<CommodityId, number>
       for (const commodity of COMMODITIES) {
@@ -111,6 +224,8 @@ class GameStateImpl {
       }
       this.seedStartingStock(system)
     }
+    const startingPop = this.galaxyPopulation
+    if (startingPop > 0) this.baselineWorthPerCapita = this.galaxyNetWorth / startingPop
   }
 
   /**
@@ -135,7 +250,48 @@ class GameStateImpl {
   /** A 3-9 month stockpile measured against the system's daily production rate. */
   private startingAmount(system: StarSystem): number {
     const months = randomInt(STARTING_STOCK_MONTHS_MIN, STARTING_STOCK_MONTHS_MAX)
-    return months * DAYS_PER_MONTH * PRODUCTION_PER_MILLION * system.population
+    return months * DAYS_PER_MONTH * PRODUCTION_PER_MILLION * this.getPopulation(system.id)
+  }
+
+  /** A system's live resident population, in millions. */
+  getPopulation(systemId: string): number {
+    return this.populations[systemId]
+  }
+
+  /** Total living population across every system, in millions. */
+  get galaxyPopulation(): number {
+    return SYSTEMS.reduce((sum, s) => sum + this.populations[s.id], 0)
+  }
+
+  /** Whether a system is currently gaining, losing, or holding population, for trend arrows. */
+  getPopulationTrend(systemId: string): 'up' | 'down' | 'flat' {
+    const pop = this.getPopulation(systemId)
+    if (pop <= 0) return 'flat'
+    const rate = this.migrationMomentum[systemId] / pop
+    if (rate > POP_TREND_FLAT) return 'up'
+    if (rate < -POP_TREND_FLAT) return 'down'
+    return 'flat'
+  }
+
+  /**
+   * A small per-day price nudge from a system's migration flow: inbound waves
+   * firm prices, outbound waves soften them. Bounded to ±{@link MIGRATION_PRICE_CAP}.
+   */
+  private migrationPriceBias(systemId: string): number {
+    const pop = this.getPopulation(systemId)
+    if (pop <= 0) return 0
+    const rate = this.migrationMomentum[systemId] / pop
+    return Math.min(MIGRATION_PRICE_CAP, Math.max(-MIGRATION_PRICE_CAP, rate * MIGRATION_PRICE_SENSITIVITY))
+  }
+
+  /**
+   * How much the player's economic weight sways the galaxy, from ~0 while small
+   * to ~1 once wealthy. Used to scale the player's influence over migration so
+   * their footprint is faint early-game and pronounced late-game.
+   */
+  get playerProminence(): number {
+    const worth = this.netWorth
+    return worth / (worth + PLAYER_PROMINENCE_HALF)
   }
 
   get cargoUsed(): number {
@@ -221,6 +377,7 @@ class GameStateImpl {
     this.cargo[commodityId] += qty
     this.cargoBasis[commodityId] += cost
     this.stock[this.currentSystemId][commodityId] -= qty
+    this.playerInfluence[this.currentSystemId] += cost
     return true
   }
 
@@ -230,10 +387,12 @@ class GameStateImpl {
     if (qty > this.stockSpace(commodityId)) return false
 
     const avgBasis = this.getAverageBasis(commodityId) ?? 0
-    this.credits += this.getPrice(commodityId) * qty
+    const proceeds = this.getPrice(commodityId) * qty
+    this.credits += proceeds
     this.cargo[commodityId] -= qty
     this.cargoBasis[commodityId] -= avgBasis * qty
     this.stock[this.currentSystemId][commodityId] += qty
+    this.playerInfluence[this.currentSystemId] += proceeds
     return true
   }
 
@@ -273,11 +432,16 @@ class GameStateImpl {
       )
     }
     for (const system of SYSTEMS) {
+      const cap = this.maxStorage(system.id)
+      // A system gaining people bids prices up; one bleeding them lets prices sag.
+      const migBias = this.migrationPriceBias(system.id)
       for (const commodity of COMMODITIES) {
+        const fillFraction = cap > 0 ? this.getStock(commodity.id, system.id) / cap : 0
         this.localRates[system.id][commodity.id] = stepRate(
           this.localRates[system.id][commodity.id],
           LOCAL_RATE_MIN,
           LOCAL_RATE_MAX,
+          supplyBias(fillFraction) + migBias,
         )
       }
     }
@@ -289,14 +453,126 @@ class GameStateImpl {
       for (const system of SYSTEMS) {
         this.runProductionDay(system)
       }
+      const popBefore: Record<string, number> = {}
+      for (const system of SYSTEMS) popBefore[system.id] = this.populations[system.id]
+      this.runMigrationDay(this.processedDay)
+      this.updateMigrationMomentum(popBefore)
+      this.runGalaxyGrowthDay()
+      this.decayPlayerInfluence()
       this.processedDay += 1
+    }
+  }
+
+  /** Folds today's net migration (population change, growth excluded) into each system's momentum EMA. */
+  private updateMigrationMomentum(popBefore: Record<string, number>) {
+    for (const system of SYSTEMS) {
+      const delta = this.populations[system.id] - popBefore[system.id]
+      this.migrationMomentum[system.id] +=
+        MOMENTUM_SMOOTHING * (delta - this.migrationMomentum[system.id])
+    }
+  }
+
+  /** Ages the player's trade footprint everywhere by one day's decay. */
+  private decayPlayerInfluence() {
+    const decay = Math.pow(0.5, 1 / PLAYER_INFLUENCE_HALFLIFE)
+    for (const system of SYSTEMS) this.playerInfluence[system.id] *= decay
+  }
+
+  /**
+   * One day of population movement: every active migration wave advances along
+   * its S-curve (a trickle that swells to a peak then tapers), and — while under
+   * the concurrency cap — a fresh wave may begin.
+   */
+  private runMigrationDay(day: number) {
+    const stillActive: Migration[] = []
+    for (const m of this.migrations) {
+      const t = (day - m.startDay + 1) / m.durationDays
+      const targetCumulative = m.total * smoothstep(t)
+      // Move only the increment the S-curve calls for today, and never drain a
+      // source below its floor.
+      const available = this.getPopulation(m.from) - MIGRATION_MIN_POP
+      const delta = Math.max(0, Math.min(targetCumulative - m.moved, available))
+      if (delta > 0) {
+        this.populations[m.from] -= delta
+        this.populations[m.to] += delta
+        m.moved += delta
+      }
+      if (t < 1) stillActive.push(m)
+    }
+    this.migrations = stillActive
+
+    if (this.migrations.length < MAX_ACTIVE_MIGRATIONS && Math.random() < MIGRATION_SPAWN_CHANCE) {
+      this.spawnMigration(day)
+    }
+  }
+
+  /**
+   * Kicks off a new migration wave, roughly on a gravity model: the source is
+   * drawn weighted by population (bigger systems send more people), and the
+   * destination weighted by population too — with a slight extra tilt toward
+   * well-to-do systems. Sizing the wave by the smaller of the two populations
+   * keeps the total sensible for both ends: a hub can't flood a hamlet, and a
+   * hamlet can't drain a hub.
+   */
+  private spawnMigration(day: number) {
+    const eligible = SYSTEMS.filter((s) => this.getPopulation(s.id) > MIGRATION_MIN_POP)
+    if (eligible.length < 2) return
+    const source = weightedPick(eligible, eligible.map((s) => this.getPopulation(s.id)))
+
+    const dests = SYSTEMS.filter((s) => s.id !== source.id)
+    const worths = dests.map((s) => this.systemNetWorth(s.id))
+    const maxWorth = Math.max(...worths, 1)
+    // Baseline gravity: population, tilted slightly toward the well-to-do.
+    const baseWeights = dests.map(
+      (s, i) => this.getPopulation(s.id) * (1 + MIGRATION_PROSPERITY_TILT * (worths[i] / maxWorth)),
+    )
+    // The player steers a share of the galaxy's total pull toward the systems
+    // they trade in — a budget added on top of gravity, scaled by prominence so
+    // it is negligible while small and galaxy-shaping once wealthy.
+    const totalBase = baseWeights.reduce((sum, w) => sum + w, 0)
+    const totalInfluence = dests.reduce((sum, s) => sum + this.playerInfluence[s.id], 0)
+    const budget = this.playerProminence * PLAYER_PULL_SHARE * totalBase
+    const destWeights = baseWeights.map(
+      (w, i) =>
+        w + (totalInfluence > 0 ? budget * (this.playerInfluence[dests[i].id] / totalInfluence) : 0),
+    )
+    const dest = weightedPick(dests, destWeights)
+
+    const fraction =
+      MIGRATION_POP_FRACTION_MIN +
+      Math.random() * (MIGRATION_POP_FRACTION_MAX - MIGRATION_POP_FRACTION_MIN)
+    const anchorPop = Math.min(this.getPopulation(source.id), this.getPopulation(dest.id))
+    this.migrations.push({
+      from: source.id,
+      to: dest.id,
+      total: anchorPop * fraction,
+      startDay: day,
+      durationDays: randomInt(MIGRATION_DURATION_MIN, MIGRATION_DURATION_MAX),
+      moved: 0,
+    })
+  }
+
+  /**
+   * A very slight galaxy-wide population increase, spread across systems in
+   * proportion to their current size. The rate peaks at {@link MAX_ANNUAL_GROWTH}
+   * while wealth-per-capita holds at its opening baseline and throttles toward
+   * zero as population outruns that wealth.
+   */
+  private runGalaxyGrowthDay() {
+    const totalPop = this.galaxyPopulation
+    if (totalPop <= 0 || this.baselineWorthPerCapita <= 0) return
+    const worthPerCapita = this.galaxyNetWorth / totalPop
+    const capacityRatio = Math.min(1, worthPerCapita / this.baselineWorthPerCapita)
+    const dailyRate = (MAX_ANNUAL_GROWTH / DAYS_PER_YEAR) * capacityRatio
+    if (dailyRate <= 0) return
+    for (const system of SYSTEMS) {
+      this.populations[system.id] += this.populations[system.id] * dailyRate
     }
   }
 
   /** A system's per-commodity storage ceiling: its daily production times a fixed factor. */
   maxStorage(systemId: string): number {
-    const system = SYSTEMS.find((s) => s.id === systemId)!
-    return PRODUCTION_PER_MILLION * system.population * MAX_STORAGE_MULTIPLIER
+    return PRODUCTION_PER_MILLION * this.getPopulation(systemId) * MAX_STORAGE_MULTIPLIER
   }
 
   /** Units of a commodity a system's market can still take in before hitting its cap. */
@@ -339,7 +615,7 @@ class GameStateImpl {
     const specialtyId = system.id
 
     const production =
-      PRODUCTION_PER_MILLION * system.population * this.productionModifier(system.id)
+      PRODUCTION_PER_MILLION * this.getPopulation(system.id) * this.productionModifier(system.id)
 
     const cap = this.maxStorage(system.id)
     stock[specialtyId] = Math.min(cap, stock[specialtyId] + Math.round(production))
@@ -348,7 +624,7 @@ class GameStateImpl {
     const available = COMMODITIES.filter((commodity) => stock[commodity.id] > 0)
     if (available.length > 0) {
       const picked = available[Math.floor(Math.random() * available.length)]
-      const consumed = CONSUMPTION_PER_MILLION * system.population
+      const consumed = CONSUMPTION_PER_MILLION * this.getPopulation(system.id)
       stock[picked.id] = Math.max(0, stock[picked.id] - consumed)
     }
   }

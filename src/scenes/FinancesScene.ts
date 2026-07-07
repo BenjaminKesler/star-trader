@@ -18,6 +18,15 @@ const TABLE_MARGIN = 40
 const DESIGN_TABLE_WIDTH = 1000
 /** Inset from each edge of the table to the name / worth columns. */
 const COLUMN_INSET = 24
+/** Pixels from the right-aligned population figure to its trend arrow. */
+const TREND_GAP = 10
+
+/** Arrow glyph and colour for each population trend. */
+const TREND_STYLE: Record<'up' | 'down' | 'flat', { glyph: string; color: string }> = {
+  up: { glyph: '▲', color: '#44ff88' },
+  down: { glyph: '▼', color: '#ff8844' },
+  flat: { glyph: '', color: '#cccccc' },
+}
 
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
@@ -28,6 +37,8 @@ interface SystemRow {
   name: Phaser.GameObjects.Text
   production: Phaser.GameObjects.Text
   population: Phaser.GameObjects.Text
+  /** Up/down arrow marking whether the system is gaining or losing residents. */
+  trend: Phaser.GameObjects.Text
   worth: Phaser.GameObjects.Text
 }
 
@@ -39,7 +50,13 @@ interface SystemRow {
 export class FinancesScene extends Phaser.Scene {
   private rows: SystemRow[] = []
   /** Systems paired with production %, population and net worth, sorted richest-first (fixed per visit). */
-  private ranked: { name: string; productionPercent: number; population: number; worth: number }[] = []
+  private ranked: {
+    name: string
+    productionPercent: number
+    population: number
+    trend: 'up' | 'down' | 'flat'
+    worth: number
+  }[] = []
 
   private galaxyValue!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
@@ -79,7 +96,8 @@ export class FinancesScene extends Phaser.Scene {
     this.ranked = SYSTEMS.map((s) => ({
       name: s.name,
       productionPercent: Math.round((gameState.productionModifier(s.id) - 1) * 100),
-      population: s.population,
+      population: gameState.getPopulation(s.id),
+      trend: gameState.getPopulationTrend(s.id),
       worth: Math.round(gameState.systemNetWorth(s.id)),
     })).sort((a, b) => b.worth - a.worth)
 
@@ -153,6 +171,14 @@ export class FinancesScene extends Phaser.Scene {
           color: '#cccccc',
         })
         .setOrigin(1, 0.5)
+      // Trend arrow sits just to the right of the (right-aligned) population figure.
+      const trend = this.add
+        .text(this.populationX + TREND_GAP, 0, '', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          color: '#cccccc',
+        })
+        .setOrigin(0, 0.5)
       const worth = this.add
         .text(this.worthX, 0, '', {
           fontFamily: 'monospace',
@@ -160,7 +186,7 @@ export class FinancesScene extends Phaser.Scene {
           color: '#cccccc',
         })
         .setOrigin(1, 0.5)
-      this.rows.push({ bg, name, production, population, worth })
+      this.rows.push({ bg, name, production, population, trend, worth })
     }
 
     // Scrollbar just inside the right edge of the table.
@@ -216,6 +242,8 @@ export class FinancesScene extends Phaser.Scene {
         .setText(formatDelta(pct))
         .setColor(pct > 0 ? '#44ff88' : pct < 0 ? '#ff8844' : '#cccccc')
       row.population.setY(rowCenterY).setText(formatPopulation(entry.population))
+      const trend = TREND_STYLE[entry.trend]
+      row.trend.setY(rowCenterY).setText(trend.glyph).setColor(trend.color)
       row.worth.setY(rowCenterY).setText(`${entry.worth.toLocaleString()}cr`)
     })
 

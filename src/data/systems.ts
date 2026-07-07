@@ -28,7 +28,7 @@ export function formatPopulation(millions: number): string {
     const rounded = Math.round(billions * 10) / 10
     return `${rounded.toLocaleString()}B`
   }
-  return `${millions.toLocaleString()}M`
+  return `${Math.round(millions).toLocaleString()}M`
 }
 
 export const SYSTEMS: StarSystem[] = [
