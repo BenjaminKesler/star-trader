@@ -245,12 +245,7 @@ export class MapScene extends Phaser.Scene {
       objects.push(statusText)
       this.stationStatuses.push(statusText)
 
-      if (isHere) {
-        circle.setInteractive({ useHandCursor: true })
-        circle.on('pointerdown', () => {
-          this.scene.start('MarketScene')
-        })
-      } else if (canTravel) {
+      if (canTravel) {
         circle.setInteractive({ useHandCursor: true })
         circle.on('pointerdown', () => {
           this.startTravel(here, system, zoom)
