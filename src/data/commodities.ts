@@ -16,78 +16,83 @@ export interface Commodity {
 }
 
 /**
- * The signature good each system produces, keyed by system id. The display name
- * is flavored to the system and its role; the base price sits in the tier for
- * that role (agriculture cheap, luxury dear) with per-system variation so no two
- * goods price identically.
+ * Every commodity starts at this price. Prices then drift from here as the
+ * galaxy and local market rates move each tick.
  */
-const SPECIALTIES: Record<string, { name: string; basePrice: number }> = {
-  // Agricultural — cheap staples
-  'verdant-fields': { name: 'Golden Grain', basePrice: 12 },
-  'amber-reach': { name: 'Winter Wheat', basePrice: 11 },
-  wheatfall: { name: 'Fresh Produce', basePrice: 9 },
-  'sunkissed-terraces': { name: 'Orchard Fruit', basePrice: 13 },
-  greenhaven: { name: 'Paddy Rice', basePrice: 10 },
-  'sable-meadow': { name: 'Prime Livestock', basePrice: 14 },
-  'sunreach-orchard': { name: 'Spiced Cider', basePrice: 13 },
-  'driftwood-commons': { name: 'Exotic Spices', basePrice: 15 },
-  'harvest-reach': { name: 'Milled Grain', basePrice: 11 },
+export const STARTING_PRICE = 100
+
+/**
+ * The signature good each system produces, keyed by system id. The display name
+ * is flavored to the system and its role. Every good starts at the same
+ * {@link STARTING_PRICE}; the market rates are what pull them apart from there.
+ */
+const SPECIALTY_NAMES: Record<string, string> = {
+  // Agricultural — staples
+  'verdant-fields': 'Golden Grain',
+  'amber-reach': 'Winter Wheat',
+  wheatfall: 'Fresh Produce',
+  'sunkissed-terraces': 'Orchard Fruit',
+  greenhaven: 'Paddy Rice',
+  'sable-meadow': 'Prime Livestock',
+  'sunreach-orchard': 'Spiced Cider',
+  'driftwood-commons': 'Exotic Spices',
+  'harvest-reach': 'Milled Grain',
 
   // Mining — raw materials
-  ironhold: { name: 'Iron Ore', basePrice: 16 },
-  'rustbelt-drift': { name: 'Scrap Metal', basePrice: 17 },
-  'deep-vein': { name: 'Raw Crystals', basePrice: 24 },
-  grimhold: { name: 'Pig Iron', basePrice: 18 },
-  'cobalt-shaft': { name: 'Smelted Ingots', basePrice: 22 },
-  'cragmont-vein': { name: 'Copper Ore', basePrice: 19 },
-  'ashfall-quarry': { name: 'Trace Minerals', basePrice: 20 },
-  'basalt-hollow': { name: 'Quarried Stone', basePrice: 16 },
-  'obsidian-drift': { name: 'Volcanic Glass', basePrice: 26 },
+  ironhold: 'Iron Ore',
+  'rustbelt-drift': 'Scrap Metal',
+  'deep-vein': 'Raw Crystals',
+  grimhold: 'Pig Iron',
+  'cobalt-shaft': 'Smelted Ingots',
+  'cragmont-vein': 'Copper Ore',
+  'ashfall-quarry': 'Trace Minerals',
+  'basalt-hollow': 'Quarried Stone',
+  'obsidian-drift': 'Volcanic Glass',
 
   // Industrial — fabricated goods
-  'forge-city': { name: 'Heavy Machinery', basePrice: 40 },
-  'cinder-yards': { name: 'Tempered Alloys', basePrice: 42 },
-  'anvil-reach': { name: 'Precision Components', basePrice: 44 },
-  'foundry-nine': { name: 'Rolled Steel', basePrice: 38 },
-  'assembly-point': { name: 'Prefab Modules', basePrice: 46 },
-  slagreach: { name: 'Hull Plating', basePrice: 41 },
-  'bastion-works': { name: 'Fusion Turbines', basePrice: 48 },
-  'ironvale-forge': { name: 'Steel Girders', basePrice: 43 },
-  'anchor-yards': { name: 'Freighter Hulls', basePrice: 45 },
+  'forge-city': 'Heavy Machinery',
+  'cinder-yards': 'Tempered Alloys',
+  'anvil-reach': 'Precision Components',
+  'foundry-nine': 'Rolled Steel',
+  'assembly-point': 'Prefab Modules',
+  slagreach: 'Hull Plating',
+  'bastion-works': 'Fusion Turbines',
+  'ironvale-forge': 'Steel Girders',
+  'anchor-yards': 'Freighter Hulls',
 
-  // Tech — high-value electronics
-  'neon-spire': { name: 'Quantum Processors', basePrice: 90 },
-  'halcyon-web': { name: 'Logic Circuits', basePrice: 92 },
-  'quartz-loom': { name: 'Silicon Chips', basePrice: 94 },
-  'circuit-hollow': { name: 'Logic Boards', basePrice: 88 },
-  'signal-crest': { name: 'Sensor Arrays', basePrice: 96 },
-  'pulse-array': { name: 'Optical Sensors', basePrice: 91 },
-  'wraith-circuit': { name: 'Nanochips', basePrice: 98 },
-  'beacon-relay': { name: 'Subspace Transmitters', basePrice: 93 },
-  'nova-loom': { name: 'Fiber Optics', basePrice: 97 },
+  // Tech — electronics
+  'neon-spire': 'Quantum Processors',
+  'halcyon-web': 'Logic Circuits',
+  'quartz-loom': 'Silicon Chips',
+  'circuit-hollow': 'Logic Boards',
+  'signal-crest': 'Sensor Arrays',
+  'pulse-array': 'Optical Sensors',
+  'wraith-circuit': 'Nanochips',
+  'beacon-relay': 'Subspace Transmitters',
+  'nova-loom': 'Fiber Optics',
 
   // Luxury — premium goods
-  'gilded-court': { name: 'Fine Silk', basePrice: 200 },
-  'opal-bazaar': { name: 'Precious Gems', basePrice: 210 },
-  'velvet-crown': { name: 'Woven Textiles', basePrice: 205 },
-  silktrade: { name: 'Royal Brocade', basePrice: 215 },
-  'gala-reach': { name: 'Rare Perfume', basePrice: 220 },
-  'moonlit-bazaar': { name: 'Fine Jewelry', basePrice: 225 },
-  'crimson-veil': { name: 'Vintage Wine', basePrice: 230 },
-  'ivory-spire': { name: 'Jade Carvings', basePrice: 218 },
-  'silver-court': { name: 'Platinum Filigree', basePrice: 208 },
+  'gilded-court': 'Fine Silk',
+  'opal-bazaar': 'Precious Gems',
+  'velvet-crown': 'Woven Textiles',
+  silktrade: 'Royal Brocade',
+  'gala-reach': 'Rare Perfume',
+  'moonlit-bazaar': 'Fine Jewelry',
+  'crimson-veil': 'Vintage Wine',
+  'ivory-spire': 'Jade Carvings',
+  'silver-court': 'Platinum Filigree',
 }
 
 export const COMMODITIES: Commodity[] = SYSTEMS.map((system) => {
-  const specialty = SPECIALTIES[system.id]
-  if (!specialty) {
+  const name = SPECIALTY_NAMES[system.id]
+  if (!name) {
     throw new Error(`No specialty commodity defined for system "${system.id}"`)
   }
   return {
     id: system.id,
     systemId: system.id,
-    name: specialty.name,
-    basePrice: specialty.basePrice,
+    name,
+    basePrice: STARTING_PRICE,
   }
 }).sort((a, b) => a.name.localeCompare(b.name))
 

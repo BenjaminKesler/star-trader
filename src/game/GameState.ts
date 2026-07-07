@@ -120,6 +120,19 @@ class GameStateImpl {
     return rankForNetWorth(this.netWorth)
   }
 
+  /** Total credit value of all commodity stock sitting in a system's market. */
+  systemNetWorth(systemId: string): number {
+    return COMMODITIES.reduce(
+      (sum, c) => sum + this.getPrice(c.id, systemId) * this.getStock(c.id, systemId),
+      0,
+    )
+  }
+
+  /** Combined net worth of every system's market across the whole galaxy. */
+  get galaxyNetWorth(): number {
+    return SYSTEMS.reduce((sum, s) => sum + this.systemNetWorth(s.id), 0)
+  }
+
   /** Formats a galaxy-date value as a "YEAR.DAY" stardate, e.g. "3200.001". */
   formatGalaxyDate(date: number): string {
     const totalDays = Math.floor(date)
