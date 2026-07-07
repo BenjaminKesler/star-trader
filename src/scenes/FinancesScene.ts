@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { createTabBar, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
 import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
+import { formatDelta } from '../ui/format'
 
 const ROW_HEIGHT = 50
 /** Y of the column-header labels, just above the scrolling list. */
@@ -14,7 +15,7 @@ const SCROLLBAR_WIDTH = 10
 const BAND_BOTTOM_GAP = 30
 
 const TABLE_MARGIN = 40
-const DESIGN_TABLE_WIDTH = 820
+const DESIGN_TABLE_WIDTH = 1000
 /** Inset from each edge of the table to the name / worth columns. */
 const COLUMN_INSET = 24
 
@@ -25,6 +26,7 @@ const GALAXY_ROW_COLOR = 0x1c2c44
 interface SystemRow {
   bg: Phaser.GameObjects.Rectangle
   name: Phaser.GameObjects.Text
+  production: Phaser.GameObjects.Text
   population: Phaser.GameObjects.Text
   worth: Phaser.GameObjects.Text
 }
@@ -36,8 +38,8 @@ interface SystemRow {
  */
 export class FinancesScene extends Phaser.Scene {
   private rows: SystemRow[] = []
-  /** Systems paired with population and net worth, sorted richest-first (fixed per visit). */
-  private ranked: { name: string; population: number; worth: number }[] = []
+  /** Systems paired with production %, population and net worth, sorted richest-first (fixed per visit). */
+  private ranked: { name: string; productionPercent: number; population: number; worth: number }[] = []
 
   private galaxyValue!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
@@ -49,6 +51,7 @@ export class FinancesScene extends Phaser.Scene {
   private visibleCapacity = 1
 
   private nameX = 0
+  private productionX = 0
   private populationX = 0
   private worthX = 0
   private tableLeft = 0
@@ -75,6 +78,7 @@ export class FinancesScene extends Phaser.Scene {
 
     this.ranked = SYSTEMS.map((s) => ({
       name: s.name,
+      productionPercent: Math.round((gameState.productionModifier(s.id) - 1) * 100),
       population: s.population,
       worth: Math.round(gameState.systemNetWorth(s.id)),
     })).sort((a, b) => b.worth - a.worth)
@@ -85,9 +89,10 @@ export class FinancesScene extends Phaser.Scene {
     const tableRight = this.tableLeft + this.tableWidth
     this.nameX = this.tableLeft + COLUMN_INSET
     this.worthX = tableRight - COLUMN_INSET
-    // Population sits between the name and worth columns, right-aligned so its
-    // numbers line up in a tidy stack.
-    this.populationX = this.tableLeft + this.tableWidth * 0.62
+    // Production and population sit between the name and worth columns, each
+    // right-aligned so their numbers line up in tidy stacks.
+    this.productionX = this.tableLeft + this.tableWidth * 0.52
+    this.populationX = this.tableLeft + this.tableWidth * 0.76
 
     // Pinned galaxy net-worth header, always visible above the list.
     const galaxyY = 140
@@ -113,6 +118,7 @@ export class FinancesScene extends Phaser.Scene {
     // Column headers for the scrolling list below.
     const headerStyle = { fontFamily: 'monospace', fontSize: '16px', color: '#7a93b8' }
     this.add.text(this.nameX, HEADER_Y, 'System', headerStyle).setOrigin(0, 0.5)
+    this.add.text(this.productionX, HEADER_Y, 'Production', headerStyle).setOrigin(1, 0.5)
     this.add.text(this.populationX, HEADER_Y, 'Population', headerStyle).setOrigin(1, 0.5)
     this.add.text(this.worthX, HEADER_Y, 'Net Worth', headerStyle).setOrigin(1, 0.5)
 
@@ -133,6 +139,13 @@ export class FinancesScene extends Phaser.Scene {
           color: '#ffffff',
         })
         .setOrigin(0, 0.5)
+      const production = this.add
+        .text(this.productionX, 0, '', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          color: '#cccccc',
+        })
+        .setOrigin(1, 0.5)
       const population = this.add
         .text(this.populationX, 0, '', {
           fontFamily: 'monospace',
@@ -147,7 +160,7 @@ export class FinancesScene extends Phaser.Scene {
           color: '#cccccc',
         })
         .setOrigin(1, 0.5)
-      this.rows.push({ bg, name, population, worth })
+      this.rows.push({ bg, name, production, population, worth })
     }
 
     // Scrollbar just inside the right edge of the table.
@@ -197,6 +210,11 @@ export class FinancesScene extends Phaser.Scene {
       const rowCenterY = rowTop + ROW_HEIGHT / 2
       row.bg.setY(rowTop).setFillStyle(i % 2 === 0 ? ROW_COLOR_EVEN : ROW_COLOR_ODD)
       row.name.setY(rowCenterY).setText(entry.name)
+      const pct = entry.productionPercent
+      row.production
+        .setY(rowCenterY)
+        .setText(formatDelta(pct))
+        .setColor(pct > 0 ? '#44ff88' : pct < 0 ? '#ff8844' : '#cccccc')
       row.population.setY(rowCenterY).setText(formatPopulation(entry.population))
       row.worth.setY(rowCenterY).setText(`${entry.worth.toLocaleString()}cr`)
     })

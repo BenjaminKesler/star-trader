@@ -3,6 +3,7 @@ import { COMMODITIES, type Commodity } from '../data/commodities'
 import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
 import { BOTTOM_BAR_HEIGHT, createTabBar } from '../ui/TabBar'
+import { formatDelta } from '../ui/format'
 
 const ROW_HEIGHT = 60
 const ROW_START_Y = 240
@@ -38,16 +39,6 @@ const NAME_COL_GAP = 45
 
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
-
-const UP_ARROW = '▲'
-const DOWN_ARROW = '▼'
-const EM_DASH = '—'
-
-function formatDelta(percent: number): string {
-  if (percent === 0) return EM_DASH
-  const arrow = percent > 0 ? UP_ARROW : DOWN_ARROW
-  return `${arrow}${Math.abs(percent)}%`
-}
 
 export class MarketScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text
@@ -272,7 +263,11 @@ export class MarketScene extends Phaser.Scene {
         .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = Math.min(this.getTradeMultiplier(), gameState.cargo[commodity.id] ?? 0)
+          const qty = Math.min(
+            this.getTradeMultiplier(),
+            gameState.cargo[commodity.id] ?? 0,
+            gameState.stockSpace(commodity.id),
+          )
           gameState.sell(commodity.id, qty)
           this.refresh()
         })
@@ -289,7 +284,7 @@ export class MarketScene extends Phaser.Scene {
         .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const qty = gameState.cargo[commodity.id] ?? 0
+          const qty = Math.min(gameState.cargo[commodity.id] ?? 0, gameState.stockSpace(commodity.id))
           gameState.sell(commodity.id, qty)
           this.refresh()
         })
@@ -478,7 +473,7 @@ export class MarketScene extends Phaser.Scene {
       const stock = gameState.getStock(commodity.id)
 
       const canBuy = stock > 0 && gameState.cargoFree > 0 && gameState.canAfford(commodity.id, 1)
-      const canSell = held > 0
+      const canSell = held > 0 && gameState.stockSpace(commodity.id) > 0
       if (canBuy) {
         buyOneBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
         buyAllBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)

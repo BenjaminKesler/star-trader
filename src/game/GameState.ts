@@ -1,5 +1,5 @@
 import { COMMODITIES, type CommodityId } from '../data/commodities'
-import { SYSTEMS } from '../data/systems'
+import { SYSTEMS, type StarSystem } from '../data/systems'
 import { rankForNetWorth, type Rank } from '../data/ranks'
 
 const GALAXY_RATE_MIN = 0.75
@@ -16,6 +16,18 @@ const PRODUCER_STOCK_MIN = 150
 const PRODUCER_STOCK_MAX = 400
 const OTHER_STOCK_MIN = 0
 const OTHER_STOCK_MAX = 40
+
+// --- Daily production / consumption ---
+// A system makes its signature good each day at this rate per million residents,
+// and its people consume some other good at this rate per million residents.
+const PRODUCTION_PER_MILLION = 2
+const CONSUMPTION_PER_MILLION = 1
+/** A commodity can be stockpiled up to the system's daily production rate times this. */
+const MAX_STORAGE_MULTIPLIER = 1000
+/** Production is halved on any day the system holds no imported goods to draw on. */
+const NO_IMPORTS_PENALTY = 0.5
+/** Each distinct imported good in stock multiplies production by this (compounding). */
+const VARIETY_BONUS_PER_IMPORT = 1.08
 
 const CARGO_UPGRADE_STEP = 20
 const CARGO_UPGRADE_BASE_COST = 600
@@ -60,6 +72,8 @@ class GameStateImpl {
   maxFuel = 5000
   currentSystemId = SYSTEMS[0].id
   galaxyDate = 0
+  /** Whole galaxy-days already run through production/consumption. */
+  private processedDay = 0
   cargoCapacity = CARGO_UPGRADE_STEP
   cargoUpgradeLevel = 0
   cargo: CargoHold = emptyCargo()
@@ -180,6 +194,7 @@ class GameStateImpl {
   sell(commodityId: CommodityId, qty: number): boolean {
     if (qty <= 0) return false
     if (qty > this.cargo[commodityId]) return false
+    if (qty > this.stockSpace(commodityId)) return false
 
     const avgBasis = this.getAverageBasis(commodityId) ?? 0
     this.credits += this.getPrice(commodityId) * qty
@@ -231,8 +246,77 @@ class GameStateImpl {
           LOCAL_RATE_MIN,
           LOCAL_RATE_MAX,
         )
-        this.stock[system.id][commodity.id] = this.rolledStock(system.id, commodity.id)
       }
+    }
+    // Market rates drift once per jump, but production/consumption is a daily
+    // process: run one cycle for each whole galaxy-day that has elapsed, letting
+    // any fractional-day remainder carry over to a later jump.
+    const targetDay = Math.floor(this.galaxyDate)
+    while (this.processedDay < targetDay) {
+      for (const system of SYSTEMS) {
+        this.runProductionDay(system)
+      }
+      this.processedDay += 1
+    }
+  }
+
+  /** A system's per-commodity storage ceiling: its daily production times a fixed factor. */
+  maxStorage(systemId: string): number {
+    const system = SYSTEMS.find((s) => s.id === systemId)!
+    return PRODUCTION_PER_MILLION * system.population * MAX_STORAGE_MULTIPLIER
+  }
+
+  /** Units of a commodity a system's market can still take in before hitting its cap. */
+  stockSpace(commodityId: CommodityId, systemId = this.currentSystemId): number {
+    return Math.max(0, this.maxStorage(systemId) - this.getStock(commodityId, systemId))
+  }
+
+  /** How many distinct imported (non-signature) goods a system currently stocks. */
+  importedTypeCount(systemId: string): number {
+    const stock = this.stock[systemId]
+    let count = 0
+    for (const commodity of COMMODITIES) {
+      if (commodity.id !== systemId && stock[commodity.id] > 0) count += 1
+    }
+    return count
+  }
+
+  /**
+   * The multiplier applied to a system's base production rate right now: a flat
+   * penalty when it stocks no imported goods, otherwise a compounding bonus for
+   * each distinct import on hand. 1.0 would be the unmodified base rate.
+   */
+  productionModifier(systemId: string): number {
+    const importedTypes = this.importedTypeCount(systemId)
+    const penalty = importedTypes === 0 ? NO_IMPORTS_PENALTY : 1
+    return penalty * Math.pow(VARIETY_BONUS_PER_IMPORT, importedTypes)
+  }
+
+  /**
+   * One day of economy for a single system: it produces its signature good and
+   * its residents consume one random good on hand.
+   *
+   * Production scales with population, is halved when no imported goods are in
+   * stock ({@link NO_IMPORTS_PENALTY}), and gets a compounding bonus for each
+   * distinct imported good on hand ({@link VARIETY_BONUS_PER_IMPORT}). Stock is
+   * capped per commodity at {@link maxStorage}; the minimum is always 0.
+   */
+  private runProductionDay(system: StarSystem) {
+    const stock = this.stock[system.id]
+    const specialtyId = system.id
+
+    const production =
+      PRODUCTION_PER_MILLION * system.population * this.productionModifier(system.id)
+
+    const cap = this.maxStorage(system.id)
+    stock[specialtyId] = Math.min(cap, stock[specialtyId] + Math.round(production))
+
+    // Residents consume one randomly chosen good that's actually on the shelves.
+    const available = COMMODITIES.filter((commodity) => stock[commodity.id] > 0)
+    if (available.length > 0) {
+      const picked = available[Math.floor(Math.random() * available.length)]
+      const consumed = CONSUMPTION_PER_MILLION * system.population
+      stock[picked.id] = Math.max(0, stock[picked.id] - consumed)
     }
   }
 
