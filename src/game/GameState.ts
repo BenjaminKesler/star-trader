@@ -20,6 +20,9 @@ const OTHER_STOCK_MAX = 40
 const CARGO_UPGRADE_STEP = 20
 const CARGO_UPGRADE_BASE_COST = 600
 
+/** Temporary flat rate to fully refuel, regardless of how empty the tank is. */
+const REFUEL_COST = 10
+
 /** Each jump advances the galaxy date by its straight-line distance over this. */
 const GALAXY_DATE_DIVISOR = 150
 const GALAXY_EPOCH_YEAR = 3200
@@ -213,6 +216,19 @@ class GameStateImpl {
         this.stock[system.id][commodity.id] = this.rolledStock(system.id, commodity.id)
       }
     }
+  }
+
+  /** Temporary flat-rate refuel: pay this to top the tank back up to {@link maxFuel}. */
+  refuelCost(): number {
+    return REFUEL_COST
+  }
+
+  refuel(): boolean {
+    if (this.fuel >= this.maxFuel) return false
+    if (this.credits < REFUEL_COST) return false
+    this.credits -= REFUEL_COST
+    this.fuel = this.maxFuel
+    return true
   }
 
   cargoUpgradeCost(): number {

@@ -53,9 +53,3 @@ export class OutfitterScene extends PlaceholderScene {
     super('OutfitterScene', 'Outfitter')
   }
 }
-
-export class FuelDepotScene extends PlaceholderScene {
-  constructor() {
-    super('FuelDepotScene', 'Fuel Depot')
-  }
-}
