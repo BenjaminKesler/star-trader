@@ -32,7 +32,11 @@ type RateTable = Record<string, Record<CommodityId, number>>
 type CargoHold = Record<CommodityId, number>
 
 function emptyCargo(): CargoHold {
-  return { food: 0, ore: 0, machinery: 0, electronics: 0, luxury: 0 }
+  const cargo = {} as CargoHold
+  for (const commodity of COMMODITIES) {
+    cargo[commodity.id] = 0
+  }
+  return cargo
 }
 
 function randomInt(min: number, max: number): number {
@@ -80,8 +84,9 @@ class GameStateImpl {
   }
 
   private rolledStock(systemId: string, commodityId: CommodityId): number {
-    const system = SYSTEMS.find((s) => s.id === systemId)!
-    return system.produces.includes(commodityId)
+    // Every system specializes in the commodity sharing its id; it mass-produces
+    // that one and stocks only trace amounts of everything else.
+    return systemId === commodityId
       ? randomInt(PRODUCER_STOCK_MIN, PRODUCER_STOCK_MAX)
       : randomInt(OTHER_STOCK_MIN, OTHER_STOCK_MAX)
   }
