@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { COMMODITIES } from '../data/commodities'
+import { COMMODITIES, type Commodity } from '../data/commodities'
 import { SYSTEMS } from '../data/systems'
 import { gameState } from '../game/GameState'
 import { BOTTOM_BAR_HEIGHT, createTabBar } from '../ui/TabBar'
@@ -11,6 +11,9 @@ const ROW_START_Y = 240
 const FOOTER_RESERVE = 120
 /** Width of the scrollbar track drawn at the right edge of the table. */
 const SCROLLBAR_WIDTH = 10
+/** Inner padding (screen px) between the hover flyout's text and its border. */
+const FLYOUT_PAD_X = 12
+const FLYOUT_PAD_Y = 8
 
 // Column offsets are measured from the left edge of the table, designed for
 // a table this wide. On narrower windows they're scaled down proportionally;
@@ -60,6 +63,9 @@ export class MarketScene extends Phaser.Scene {
   private upgradeButton!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
   private scrollThumb!: Phaser.GameObjects.Rectangle
+  private flyout!: Phaser.GameObjects.Container
+  private flyoutBg!: Phaser.GameObjects.Rectangle
+  private flyoutText!: Phaser.GameObjects.Text
   private ctrlKey!: Phaser.Input.Keyboard.Key
   private shiftKey!: Phaser.Input.Keyboard.Key
 
@@ -150,6 +156,10 @@ export class MarketScene extends Phaser.Scene {
         fontSize: rowFontSize,
         color: '#ffffff',
       })
+      nameText
+        .setInteractive({ useHandCursor: false })
+        .on('pointerover', () => this.showCommodityFlyout(commodity, nameText))
+        .on('pointerout', () => this.hideFlyout())
       this.nameTexts[commodity.id] = nameText
 
       const priceText = this.add.text(priceX, y, '', {
@@ -292,6 +302,8 @@ export class MarketScene extends Phaser.Scene {
         this.refresh()
       })
 
+    this.createFlyout()
+
     this.refresh()
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this)
@@ -329,8 +341,47 @@ export class MarketScene extends Phaser.Scene {
     const next = Phaser.Math.Clamp(this.scrollRow + rows, 0, this.maxScrollRow())
     if (next !== this.scrollRow) {
       this.scrollRow = next
+      // The hovered row slides out from under the cursor, so drop its flyout.
+      this.hideFlyout()
       this.refresh()
     }
+  }
+
+  /**
+   * Builds the (initially hidden) hover flyout: a bordered panel sized to its
+   * text in {@link showCommodityFlyout}. Drawn above every row at a high depth.
+   */
+  private createFlyout() {
+    const bg = this.add.rectangle(0, 0, 10, 10, 0x0a1420, 0.95).setOrigin(0, 0.5)
+    bg.setStrokeStyle(1.5, 0x4488ff, 0.9)
+    const text = this.add
+      .text(FLYOUT_PAD_X, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#cfefff',
+      })
+      .setOrigin(0, 0.5)
+    this.flyoutBg = bg
+    this.flyoutText = text
+    this.flyout = this.add.container(0, 0, [bg, text]).setDepth(1000).setVisible(false)
+  }
+
+  /** Pops the flyout above the commodity's name, noting its producing system. */
+  private showCommodityFlyout(commodity: Commodity, nameText: Phaser.GameObjects.Text) {
+    const producer = SYSTEMS.find((s) => s.id === commodity.systemId)!
+    const producedHere = producer.id === gameState.currentSystemId
+    this.flyoutText.setText(
+      producedHere ? `Produced here — ${producer.name}` : `Produced in ${producer.name}`,
+    )
+    const width = this.flyoutText.width + FLYOUT_PAD_X * 2
+    const height = this.flyoutText.height + FLYOUT_PAD_Y * 2
+    this.flyoutBg.setSize(width, height)
+    // Origin-centered flyout, floated just above the hovered name.
+    this.flyout.setPosition(nameText.x, nameText.y - 6 - height / 2).setVisible(true)
+  }
+
+  private hideFlyout() {
+    this.flyout.setVisible(false)
   }
 
   private refresh() {
