@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { COMMODITIES, type Commodity } from '../data/commodities'
-import { SYSTEMS } from '../data/systems'
+import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
 import { BOTTOM_BAR_HEIGHT, createTabBar } from '../ui/TabBar'
 
@@ -96,7 +96,7 @@ export class MarketScene extends Phaser.Scene {
     createTabBar(this, this.scene.key)
 
     this.add
-      .text(this.scale.width / 2, 75, `${here.name} Market`, {
+      .text(this.scale.width / 2, 75, `${here.name} Market — Pop. ${formatPopulation(here.population)}`, {
         fontFamily: 'monospace',
         fontSize: '36px',
         color: '#ffffff',

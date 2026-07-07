@@ -6,6 +6,8 @@ export interface StarSystem {
   role: SystemRole
   x: number
   y: number
+  /** Resident population, measured in millions of people. */
+  population: number
   /** ids of systems directly reachable from this one */
   connections: string[]
 }
@@ -16,6 +18,19 @@ export const MAX_JUMP_DIST = 1350
 /** Reference distance the default camera zoom frames around. Smaller than the actual jump cap, so neighbors can sit offscreen and be reached by scrolling. */
 export const ZOOM_FRAME_DIST = 450
 
+/**
+ * Formats a population (given in millions) for display: billions get a "B"
+ * suffix with up to one decimal, smaller populations stay in millions.
+ */
+export function formatPopulation(millions: number): string {
+  if (millions >= 1000) {
+    const billions = millions / 1000
+    const rounded = Math.round(billions * 10) / 10
+    return `${rounded.toLocaleString()}B`
+  }
+  return `${millions.toLocaleString()}M`
+}
+
 export const SYSTEMS: StarSystem[] = [
   {
     id: 'verdant-fields',
@@ -23,6 +38,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 1536,
     y: 420,
+    population: 18,
     connections: ['neon-spire', 'forge-city', 'cinder-yards'],
   },
   {
@@ -31,6 +47,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 2280,
     y: 900,
+    population: 4200,
     connections: ['verdant-fields', 'gilded-court', 'rustbelt-drift'],
   },
   {
@@ -39,6 +56,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 2010,
     y: 1710,
+    population: 3100,
     connections: ['neon-spire', 'ironhold', 'amber-reach'],
   },
   {
@@ -47,6 +65,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 1065,
     y: 1710,
+    population: 22,
     connections: ['gilded-court', 'forge-city', 'cinder-yards'],
   },
   {
@@ -55,6 +74,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 795,
     y: 900,
+    population: 31,
     connections: ['ironhold', 'verdant-fields', 'cinder-yards'],
   },
   {
@@ -63,6 +83,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 1203,
     y: 2196,
+    population: 9,
     connections: ['gilded-court', 'opal-bazaar', 'wheatfall'],
   },
   {
@@ -71,6 +92,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 3009,
     y: 786,
+    population: 14,
     connections: ['neon-spire', 'halcyon-web', 'deep-vein'],
   },
   {
@@ -79,6 +101,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 1779,
     y: 1170,
+    population: 27,
     connections: ['ironhold', 'verdant-fields', 'forge-city'],
   },
   {
@@ -87,6 +110,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 3852,
     y: 363,
+    population: 6,
     connections: ['rustbelt-drift', 'greenhaven'],
   },
   {
@@ -95,6 +119,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 1719,
     y: 2568,
+    population: 12,
     connections: ['amber-reach', 'anvil-reach', 'wheatfall'],
   },
   {
@@ -103,6 +128,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 738,
     y: 2709,
+    population: 4,
     connections: ['amber-reach', 'opal-bazaar'],
   },
   {
@@ -111,6 +137,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 2499,
     y: 1620,
+    population: 19,
     connections: ['rustbelt-drift', 'quartz-loom', 'foundry-nine'],
   },
   {
@@ -119,6 +146,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 1554,
     y: 3441,
+    population: 25,
     connections: ['opal-bazaar', 'velvet-crown', 'sunkissed-terraces'],
   },
   {
@@ -127,6 +155,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 3366,
     y: 1983,
+    population: 33,
     connections: ['deep-vein', 'foundry-nine', 'signal-crest', 'sable-meadow'],
   },
   {
@@ -135,6 +164,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 954,
     y: 3837,
+    population: 8,
     connections: ['anvil-reach', 'grimhold', 'silktrade'],
   },
   {
@@ -143,6 +173,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 2457,
     y: 3840,
+    population: 15,
     connections: ['anvil-reach', 'circuit-hollow', 'assembly-point'],
   },
   {
@@ -151,6 +182,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 810,
     y: 4434,
+    population: 5,
     connections: ['velvet-crown', 'silktrade'],
   },
   {
@@ -159,6 +191,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 2433,
     y: 2394,
+    population: 29,
     connections: ['deep-vein', 'quartz-loom', 'signal-crest'],
   },
   {
@@ -167,6 +200,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 2640,
     y: 4908,
+    population: 11,
     connections: ['sunkissed-terraces', 'silktrade', 'assembly-point'],
   },
   {
@@ -175,6 +209,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 1773,
     y: 4497,
+    population: 13,
     connections: ['circuit-hollow', 'grimhold', 'velvet-crown'],
   },
   {
@@ -183,6 +218,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 4734,
     y: 723,
+    population: 7,
     connections: ['halcyon-web', 'cobalt-shaft', 'gala-reach'],
   },
   {
@@ -191,6 +227,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 5289,
     y: 1494,
+    population: 21,
     connections: ['greenhaven', 'gala-reach', 'pulse-array'],
   },
   {
@@ -199,6 +236,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 2958,
     y: 3789,
+    population: 28,
     connections: ['circuit-hollow', 'signal-crest', 'sunkissed-terraces', 'wraith-circuit'],
   },
   {
@@ -207,6 +245,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 2964,
     y: 2967,
+    population: 35,
     connections: ['assembly-point', 'foundry-nine', 'quartz-loom', 'moonlit-bazaar'],
   },
   {
@@ -215,6 +254,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 5919,
     y: 798,
+    population: 4800,
     connections: ['greenhaven', 'cobalt-shaft'],
   },
   {
@@ -223,6 +263,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 3720,
     y: 1410,
+    population: 3,
     connections: ['cragmont-vein', 'quartz-loom'],
   },
   {
@@ -231,6 +272,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 4440,
     y: 1860,
+    population: 17,
     connections: ['sable-meadow', 'slagreach', 'moonlit-bazaar'],
   },
   {
@@ -239,6 +281,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 4950,
     y: 1950,
+    population: 30,
     connections: ['cragmont-vein', 'pulse-array', 'sunreach-orchard', 'ashfall-quarry'],
   },
   {
@@ -247,6 +290,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 5940,
     y: 1560,
+    population: 24,
     connections: ['slagreach', 'bastion-works', 'cobalt-shaft'],
   },
   {
@@ -255,6 +299,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 4080,
     y: 2550,
+    population: 16,
     connections: ['cragmont-vein', 'sunreach-orchard', 'wraith-circuit', 'signal-crest'],
   },
   {
@@ -263,6 +308,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 4830,
     y: 2940,
+    population: 10,
     connections: ['slagreach', 'moonlit-bazaar', 'driftwood-commons'],
   },
   {
@@ -271,6 +317,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 5700,
     y: 2490,
+    population: 6,
     connections: ['slagreach', 'bastion-works'],
   },
   {
@@ -279,6 +326,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 6240,
     y: 2100,
+    population: 2600,
     connections: ['pulse-array', 'ashfall-quarry', 'basalt-hollow'],
   },
   {
@@ -287,6 +335,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 3570,
     y: 3540,
+    population: 20,
     connections: ['moonlit-bazaar', 'crimson-veil', 'assembly-point'],
   },
   {
@@ -295,6 +344,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 4410,
     y: 3930,
+    population: 14,
     connections: ['wraith-circuit', 'ironvale-forge', 'beacon-relay'],
   },
   {
@@ -303,6 +353,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 5280,
     y: 3450,
+    population: 8,
     connections: ['sunreach-orchard', 'ivory-spire'],
   },
   {
@@ -311,6 +362,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 6180,
     y: 3150,
+    population: 23,
     connections: ['bastion-works', 'ivory-spire', 'harvest-reach'],
   },
   {
@@ -319,6 +371,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 3990,
     y: 4500,
+    population: 32,
     connections: ['crimson-veil', 'beacon-relay', 'obsidian-drift'],
   },
   {
@@ -327,6 +380,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 4800,
     y: 4650,
+    population: 26,
     connections: ['crimson-veil', 'ironvale-forge', 'anchor-yards'],
   },
   {
@@ -335,6 +389,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 5670,
     y: 4200,
+    population: 12,
     connections: ['driftwood-commons', 'basalt-hollow', 'nova-loom'],
   },
   {
@@ -343,6 +398,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'agricultural',
     x: 6270,
     y: 3840,
+    population: 9,
     connections: ['basalt-hollow', 'silver-court'],
   },
   {
@@ -351,6 +407,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'mining',
     x: 3630,
     y: 5250,
+    population: 5,
     connections: ['ironvale-forge', 'anchor-yards'],
   },
   {
@@ -359,6 +416,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'industrial',
     x: 4560,
     y: 5340,
+    population: 27,
     connections: ['beacon-relay', 'obsidian-drift', 'nova-loom'],
   },
   {
@@ -367,6 +425,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'tech',
     x: 5490,
     y: 5100,
+    population: 38,
     connections: ['ivory-spire', 'anchor-yards', 'silver-court'],
   },
   {
@@ -375,6 +434,7 @@ export const SYSTEMS: StarSystem[] = [
     role: 'luxury',
     x: 6150,
     y: 4800,
+    population: 2300,
     connections: ['harvest-reach', 'nova-loom'],
   },
 ]

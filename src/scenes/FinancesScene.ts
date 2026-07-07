@@ -1,11 +1,13 @@
 import Phaser from 'phaser'
 import { createTabBar, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
-import { SYSTEMS } from '../data/systems'
+import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
 
 const ROW_HEIGHT = 50
+/** Y of the column-header labels, just above the scrolling list. */
+const HEADER_Y = 196
 /** Y of the top of the scrolling system list. */
-const ROW_START_Y = 200
+const ROW_START_Y = 224
 /** Width of the scrollbar track drawn at the right edge of the table. */
 const SCROLLBAR_WIDTH = 10
 /** Gap kept below the list before the bottom tab bar. */
@@ -23,6 +25,7 @@ const GALAXY_ROW_COLOR = 0x1c2c44
 interface SystemRow {
   bg: Phaser.GameObjects.Rectangle
   name: Phaser.GameObjects.Text
+  population: Phaser.GameObjects.Text
   worth: Phaser.GameObjects.Text
 }
 
@@ -33,8 +36,8 @@ interface SystemRow {
  */
 export class FinancesScene extends Phaser.Scene {
   private rows: SystemRow[] = []
-  /** Systems paired with their net worth, sorted richest-first (fixed per visit). */
-  private ranked: { name: string; worth: number }[] = []
+  /** Systems paired with population and net worth, sorted richest-first (fixed per visit). */
+  private ranked: { name: string; population: number; worth: number }[] = []
 
   private galaxyValue!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
@@ -46,6 +49,7 @@ export class FinancesScene extends Phaser.Scene {
   private visibleCapacity = 1
 
   private nameX = 0
+  private populationX = 0
   private worthX = 0
   private tableLeft = 0
   private tableWidth = 0
@@ -71,6 +75,7 @@ export class FinancesScene extends Phaser.Scene {
 
     this.ranked = SYSTEMS.map((s) => ({
       name: s.name,
+      population: s.population,
       worth: Math.round(gameState.systemNetWorth(s.id)),
     })).sort((a, b) => b.worth - a.worth)
 
@@ -80,6 +85,9 @@ export class FinancesScene extends Phaser.Scene {
     const tableRight = this.tableLeft + this.tableWidth
     this.nameX = this.tableLeft + COLUMN_INSET
     this.worthX = tableRight - COLUMN_INSET
+    // Population sits between the name and worth columns, right-aligned so its
+    // numbers line up in a tidy stack.
+    this.populationX = this.tableLeft + this.tableWidth * 0.62
 
     // Pinned galaxy net-worth header, always visible above the list.
     const galaxyY = 140
@@ -102,6 +110,12 @@ export class FinancesScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
 
+    // Column headers for the scrolling list below.
+    const headerStyle = { fontFamily: 'monospace', fontSize: '16px', color: '#7a93b8' }
+    this.add.text(this.nameX, HEADER_Y, 'System', headerStyle).setOrigin(0, 0.5)
+    this.add.text(this.populationX, HEADER_Y, 'Population', headerStyle).setOrigin(1, 0.5)
+    this.add.text(this.worthX, HEADER_Y, 'Net Worth', headerStyle).setOrigin(1, 0.5)
+
     // How many system rows fit between the header and the bottom bar.
     const bandBottom = this.scale.height - BOTTOM_BAR_HEIGHT - BAND_BOTTOM_GAP
     this.visibleCapacity = Math.max(1, Math.floor((bandBottom - ROW_START_Y) / ROW_HEIGHT))
@@ -119,6 +133,13 @@ export class FinancesScene extends Phaser.Scene {
           color: '#ffffff',
         })
         .setOrigin(0, 0.5)
+      const population = this.add
+        .text(this.populationX, 0, '', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          color: '#cccccc',
+        })
+        .setOrigin(1, 0.5)
       const worth = this.add
         .text(this.worthX, 0, '', {
           fontFamily: 'monospace',
@@ -126,7 +147,7 @@ export class FinancesScene extends Phaser.Scene {
           color: '#cccccc',
         })
         .setOrigin(1, 0.5)
-      this.rows.push({ bg, name, worth })
+      this.rows.push({ bg, name, population, worth })
     }
 
     // Scrollbar just inside the right edge of the table.
@@ -176,6 +197,7 @@ export class FinancesScene extends Phaser.Scene {
       const rowCenterY = rowTop + ROW_HEIGHT / 2
       row.bg.setY(rowTop).setFillStyle(i % 2 === 0 ? ROW_COLOR_EVEN : ROW_COLOR_ODD)
       row.name.setY(rowCenterY).setText(entry.name)
+      row.population.setY(rowCenterY).setText(formatPopulation(entry.population))
       row.worth.setY(rowCenterY).setText(`${entry.worth.toLocaleString()}cr`)
     })
 
