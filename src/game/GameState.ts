@@ -12,10 +12,15 @@ const SMALL_MOVE_RANGE = 0.05
 const BOOM_CRASH_RANGE = 0.25
 const MEAN_REVERSION = 0.05
 
-const PRODUCER_STOCK_MIN = 150
-const PRODUCER_STOCK_MAX = 400
-const OTHER_STOCK_MIN = 0
-const OTHER_STOCK_MAX = 40
+// --- Initial stock seeding ---
+/** A fresh system stocks its own good plus this many randomly chosen imports. */
+const STARTING_IMPORTS_MIN = 0
+const STARTING_IMPORTS_MAX = 2
+/** Each starting good is seeded with this many months of the system's output. */
+const STARTING_STOCK_MONTHS_MIN = 3
+const STARTING_STOCK_MONTHS_MAX = 9
+/** Days per month, used to turn a month count into a day-rate stockpile. */
+const DAYS_PER_MONTH = 30
 
 // --- Daily production / consumption ---
 // A system makes its signature good each day at this rate per million residents,
@@ -55,6 +60,16 @@ function randomInt(min: number, max: number): number {
   return Math.floor(min + Math.random() * (max - min + 1))
 }
 
+/** Returns up to `count` distinct items drawn at random from `items`. */
+function pickDistinct<T>(items: T[], count: number): T[] {
+  const pool = items.slice()
+  const picked: T[] = []
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0])
+  }
+  return picked
+}
+
 function stepRate(current: number, min: number, max: number): number {
   const isBoomOrCrash = Math.random() < BOOM_CRASH_CHANCE
   const range = isBoomOrCrash ? BOOM_CRASH_RANGE : SMALL_MOVE_RANGE
@@ -92,17 +107,35 @@ class GameStateImpl {
       this.stock[system.id] = {} as Record<CommodityId, number>
       for (const commodity of COMMODITIES) {
         this.localRates[system.id][commodity.id] = 1
-        this.stock[system.id][commodity.id] = this.rolledStock(system.id, commodity.id)
+        this.stock[system.id][commodity.id] = 0
       }
+      this.seedStartingStock(system)
     }
   }
 
-  private rolledStock(systemId: string, commodityId: CommodityId): number {
-    // Every system specializes in the commodity sharing its id; it mass-produces
-    // that one and stocks only trace amounts of everything else.
-    return systemId === commodityId
-      ? randomInt(PRODUCER_STOCK_MIN, PRODUCER_STOCK_MAX)
-      : randomInt(OTHER_STOCK_MIN, OTHER_STOCK_MAX)
+  /**
+   * Seeds a system's opening market: a few months' worth of its own signature
+   * good, plus a few months' worth of 0-2 randomly chosen imported goods. The
+   * small, variable import count keeps the early-game variety bonus modest.
+   */
+  private seedStartingStock(system: StarSystem) {
+    const stock = this.stock[system.id]
+    stock[system.id] = this.startingAmount(system)
+
+    const importCount = randomInt(STARTING_IMPORTS_MIN, STARTING_IMPORTS_MAX)
+    const imports = pickDistinct(
+      COMMODITIES.filter((c) => c.id !== system.id),
+      importCount,
+    )
+    for (const commodity of imports) {
+      stock[commodity.id] = this.startingAmount(system)
+    }
+  }
+
+  /** A 3-9 month stockpile measured against the system's daily production rate. */
+  private startingAmount(system: StarSystem): number {
+    const months = randomInt(STARTING_STOCK_MONTHS_MIN, STARTING_STOCK_MONTHS_MAX)
+    return months * DAYS_PER_MONTH * PRODUCTION_PER_MILLION * system.population
   }
 
   get cargoUsed(): number {
