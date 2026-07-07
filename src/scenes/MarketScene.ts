@@ -33,6 +33,9 @@ const INVENTORY_OFFSET = 1350
 const SELL_ONE_OFFSET = 1485
 const SELL_ALL_OFFSET = 1598
 
+/** Padding (design units) kept between the longest commodity name and divider 1. */
+const NAME_COL_GAP = 45
+
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
 
@@ -113,9 +116,23 @@ export class MarketScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-SHIFT', () => this.refresh())
     this.input.keyboard!.on('keyup-SHIFT', () => this.refresh())
 
+    // Widen the name column to fit the longest commodity name. Names are
+    // measured at the design font size (27px), so widths come out in the same
+    // "design units" as the column offsets; every column from divider 1 rightward
+    // then slides over by the extra room the names need.
+    const measurer = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: '27px' }).setVisible(false)
+    let widestName = 0
+    for (const commodity of COMMODITIES) {
+      measurer.setText(commodity.name)
+      widestName = Math.max(widestName, measurer.width)
+    }
+    measurer.destroy()
+    const columnShift = Math.max(0, NAME_OFFSET + widestName + NAME_COL_GAP - DIVIDER1_OFFSET)
+    const designWidth = DESIGN_TABLE_WIDTH + columnShift
+
     const availableWidth = this.scale.width - TABLE_MARGIN * 2
-    const tableWidth = Math.min(DESIGN_TABLE_WIDTH, availableWidth)
-    const columnScale = tableWidth / DESIGN_TABLE_WIDTH
+    const tableWidth = Math.min(designWidth, availableWidth)
+    const columnScale = tableWidth / designWidth
     const tableLeft = (this.scale.width - tableWidth) / 2
     const tableRight = tableLeft + tableWidth
 
@@ -126,17 +143,21 @@ export class MarketScene extends Phaser.Scene {
     this.visibleCapacity = Math.max(1, Math.floor((bandBottom - ROW_START_Y) / ROW_HEIGHT))
     this.scrollRow = 0
 
-    const nameX = tableLeft + NAME_OFFSET * columnScale
-    const divider1X = tableLeft + DIVIDER1_OFFSET * columnScale
-    const priceX = tableLeft + PRICE_OFFSET * columnScale
-    const stockX = tableLeft + STOCK_OFFSET * columnScale
-    const buyOneX = tableLeft + BUY_ONE_OFFSET * columnScale
-    const buyAllX = tableLeft + BUY_ALL_OFFSET * columnScale
-    const divider2X = tableLeft + DIVIDER2_OFFSET * columnScale
-    const basisX = tableLeft + BASIS_OFFSET * columnScale
-    const inventoryX = tableLeft + INVENTORY_OFFSET * columnScale
-    const sellOneX = tableLeft + SELL_ONE_OFFSET * columnScale
-    const sellAllX = tableLeft + SELL_ALL_OFFSET * columnScale
+    // The name column keeps its left offset; everything from divider 1 rightward
+    // is pushed over by columnShift.
+    const colX = (offset: number) =>
+      tableLeft + (offset + (offset >= DIVIDER1_OFFSET ? columnShift : 0)) * columnScale
+    const nameX = colX(NAME_OFFSET)
+    const divider1X = colX(DIVIDER1_OFFSET)
+    const priceX = colX(PRICE_OFFSET)
+    const stockX = colX(STOCK_OFFSET)
+    const buyOneX = colX(BUY_ONE_OFFSET)
+    const buyAllX = colX(BUY_ALL_OFFSET)
+    const divider2X = colX(DIVIDER2_OFFSET)
+    const basisX = colX(BASIS_OFFSET)
+    const inventoryX = colX(INVENTORY_OFFSET)
+    const sellOneX = colX(SELL_ONE_OFFSET)
+    const sellAllX = colX(SELL_ALL_OFFSET)
 
     // Font size and button padding shrink with the columns so buttons never
     // overlap their neighbors on narrow windows.
@@ -157,23 +178,28 @@ export class MarketScene extends Phaser.Scene {
         color: '#ffffff',
       })
       nameText
+        .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: false })
         .on('pointerover', () => this.showCommodityFlyout(commodity, nameText))
         .on('pointerout', () => this.hideFlyout())
       this.nameTexts[commodity.id] = nameText
 
-      const priceText = this.add.text(priceX, y, '', {
-        fontFamily: 'monospace',
-        fontSize: rowFontSize,
-        color: '#cccccc',
-      })
+      const priceText = this.add
+        .text(priceX, y, '', {
+          fontFamily: 'monospace',
+          fontSize: rowFontSize,
+          color: '#cccccc',
+        })
+        .setOrigin(0, 0.5)
       this.priceTexts[commodity.id] = priceText
 
-      const stockText = this.add.text(stockX, y, '', {
-        fontFamily: 'monospace',
-        fontSize: rowFontSize,
-        color: '#cccccc',
-      })
+      const stockText = this.add
+        .text(stockX, y, '', {
+          fontFamily: 'monospace',
+          fontSize: rowFontSize,
+          color: '#cccccc',
+        })
+        .setOrigin(0, 0.5)
       this.stockTexts[commodity.id] = stockText
 
       const buyOneBtn = this.add
@@ -184,6 +210,7 @@ export class MarketScene extends Phaser.Scene {
           backgroundColor: '#113322',
           padding: buttonPadding,
         })
+        .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const affordable = Math.floor(gameState.credits / gameState.getPrice(commodity.id))
@@ -206,6 +233,7 @@ export class MarketScene extends Phaser.Scene {
           backgroundColor: '#113322',
           padding: buttonPadding,
         })
+        .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const affordable = Math.floor(gameState.credits / gameState.getPrice(commodity.id))
@@ -215,18 +243,22 @@ export class MarketScene extends Phaser.Scene {
         })
       this.buyAllButtons[commodity.id] = buyAllBtn
 
-      const basisText = this.add.text(basisX, y, '', {
-        fontFamily: 'monospace',
-        fontSize: rowFontSize,
-        color: '#888888',
-      })
+      const basisText = this.add
+        .text(basisX, y, '', {
+          fontFamily: 'monospace',
+          fontSize: rowFontSize,
+          color: '#888888',
+        })
+        .setOrigin(0, 0.5)
       this.basisTexts[commodity.id] = basisText
 
-      const inventoryText = this.add.text(inventoryX, y, '', {
-        fontFamily: 'monospace',
-        fontSize: rowFontSize,
-        color: '#cccccc',
-      })
+      const inventoryText = this.add
+        .text(inventoryX, y, '', {
+          fontFamily: 'monospace',
+          fontSize: rowFontSize,
+          color: '#cccccc',
+        })
+        .setOrigin(0, 0.5)
       this.inventoryTexts[commodity.id] = inventoryText
 
       const sellOneBtn = this.add
@@ -237,6 +269,7 @@ export class MarketScene extends Phaser.Scene {
           backgroundColor: '#332211',
           padding: buttonPadding,
         })
+        .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const qty = Math.min(this.getTradeMultiplier(), gameState.cargo[commodity.id] ?? 0)
@@ -253,6 +286,7 @@ export class MarketScene extends Phaser.Scene {
           backgroundColor: '#332211',
           padding: buttonPadding,
         })
+        .setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const qty = gameState.cargo[commodity.id] ?? 0
@@ -460,9 +494,12 @@ export class MarketScene extends Phaser.Scene {
         sellAllBtn?.disableInteractive().setAlpha(0.4)
       }
 
-      const y = ROW_START_Y + windowRow * ROW_HEIGHT
-      rowObjects.forEach((obj) => obj?.setY(y))
-      rowBg?.setY(y - 9)
+      const rowTop = ROW_START_Y - 9 + windowRow * ROW_HEIGHT
+      // Content objects use a vertically-centered origin, so anchor them to the
+      // middle of the row band; the background hangs from its top-left corner.
+      const rowCenterY = rowTop + ROW_HEIGHT / 2
+      rowObjects.forEach((obj) => obj?.setY(rowCenterY))
+      rowBg?.setY(rowTop)
       rowBg?.setFillStyle(windowRow % 2 === 0 ? ROW_COLOR_EVEN : ROW_COLOR_ODD)
 
       const percentOffBase = Math.round(((price - commodity.basePrice) / commodity.basePrice) * 100)
