@@ -112,6 +112,11 @@ const STARTING_EXPANSION_BAYS = 2
 /** Credits charged per unit of fuel bought when refueling at the Depot. */
 const REFUEL_PRICE_PER_UNIT = 0.05
 
+/** Credit cost of a single travel license, sold at the Outfitter. */
+const LICENSE_PRICE = 10_000
+/** Systems the player is licensed to travel to when a new game begins. */
+const STARTING_LICENSES = ['verdant-fields', 'forge-city', 'cinder-yards']
+
 /** Each jump advances the galaxy date by its straight-line distance over this. */
 const GALAXY_DATE_DIVISOR = 150
 const GALAXY_EPOCH_YEAR = 3200
@@ -585,6 +590,9 @@ class GameStateImpl {
       const licensed = SYSTEMS.find((s) => s.id === id)
       if (!licensed?.connections.includes(systemId)) continue
       if (Math.hypot(target.x - licensed.x, target.y - licensed.y) <= range) return true
+    for (const id of this.licensedSystemIds) {
+      const licensed = SYSTEMS.find((s) => s.id === id)
+      if (licensed?.connections.includes(systemId)) return true
     }
     return false
   }
