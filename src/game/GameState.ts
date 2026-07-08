@@ -8,6 +8,7 @@ import {
   FUEL_TANK_CAPACITY,
   type ExpansionId,
 } from '../data/expansions'
+import { SUBSYSTEM_IDS, SUBSYSTEM_MAX, type SubsystemId } from '../data/subsystems'
 
 const GALAXY_RATE_MIN = 0.85
 const GALAXY_RATE_MAX = 1.3
@@ -108,18 +109,63 @@ const BASE_MAX_FUEL = 5000
 /** Expansion bays on the starting ship — the ceiling on installed expansions. */
 const STARTING_EXPANSION_BAYS = 2
 
-/** Temporary flat rate to fully refuel, regardless of how empty the tank is. */
-const REFUEL_COST = 10
-
-/** Credit cost of a single travel license, sold at the Outfitter. */
-const LICENSE_PRICE = 10_000
-/** Systems the player is licensed to travel to when a new game begins. */
-const STARTING_LICENSES = ['verdant-fields', 'forge-city', 'cinder-yards']
+/** Credits charged per unit of fuel bought when refueling at the Depot. */
+const REFUEL_PRICE_PER_UNIT = 0.05
 
 /** Each jump advances the galaxy date by its straight-line distance over this. */
 const GALAXY_DATE_DIVISOR = 150
 const GALAXY_EPOCH_YEAR = 3200
 const DAYS_PER_YEAR = 365
+
+// --- Travel damage & subsystem wear ---
+// Every jump lightly wears the ship's subsystems. Each system independently has
+// a chance to take a small random hit, scaled by the days spent in transit, so
+// longer hauls are rougher. Effects of the accumulated wear are applied wherever
+// the relevant stat is read (travel time, cargo, visibility, crew).
+/** Chance, per subsystem per jump, that it takes any wear at all. */
+const TRAVEL_DAMAGE_CHANCE = 0.5
+/** Integrity lost by a worn subsystem, per day of transit, before the random spread. */
+const TRAVEL_DAMAGE_MIN = 1
+const TRAVEL_DAMAGE_MAX = 5
+/** At 0 engine integrity a jump would take this much longer (travel is blocked there anyway). */
+const ENGINE_MAX_SLOWDOWN = 1.0
+/** At 0 hull integrity, cargo capacity is cut by this fraction (blocked at 0 anyway). */
+const HULL_MAX_CARGO_LOSS = 0.2
+/** Sensor reach at full integrity, in world units — beyond the jump cap, so full sensors reveal every neighbor. */
+const SENSOR_FULL_RANGE = 1400
+
+// --- Repairs ---
+/** Credits charged per point of integrity restored at the Depot. */
+const REPAIR_COST_PER_POINT = 4
+
+// --- Crew & wages ---
+/** Credits paid to each crew member, per day. */
+const CREW_DAILY_WAGE = 5
+/** When a crew member dies, their wage is owed to next of kin for this long. */
+const RESTITUTION_DAYS = 10 * DAYS_PER_YEAR
+
+// --- Budget (trailing-average) accounting ---
+/** Length of the trailing window the Budget page averages costs over. */
+const BUDGET_WINDOW_DAYS = DAYS_PER_YEAR
+/** Cost lines are shown as an average per this many days (a 30-day month). */
+const BUDGET_PERIOD_DAYS = DAYS_PER_MONTH
+
+/** The cost categories tracked in the daily budget ledger. */
+type CostCategory = 'fuel' | 'crew' | 'repairs' | 'restitution'
+type DailyLedger = Record<CostCategory, number>
+
+/** An outstanding restitution obligation: a dead crew member's wage, still owed. */
+interface Restitution {
+  /** Credits owed per day to the next of kin. */
+  dailyAmount: number
+  /** Days of payment still remaining. */
+  daysRemaining: number
+}
+
+/** Credit cost of a single travel license, sold at the Outfitter. */
+const LICENSE_PRICE = 10_000
+/** Systems the player is licensed to travel to when a new game begins. */
+const STARTING_LICENSES = ['verdant-fields', 'forge-city', 'cinder-yards']
 
 type RateTable = Record<string, Record<CommodityId, number>>
 type CargoHold = Record<CommodityId, number>
@@ -212,6 +258,17 @@ class GameStateImpl {
   private cargoBasis: CargoHold = emptyCargo()
   /** System ids the player holds a travel license for; travel is gated on holding one. */
   licensedSystemIds: Set<string> = new Set(STARTING_LICENSES)
+
+  /** Integrity (0–{@link SUBSYSTEM_MAX}) of each ship subsystem; a fresh ship is at full. */
+  subsystems: Record<SubsystemId, number> = { 'life-support': SUBSYSTEM_MAX, engines: SUBSYSTEM_MAX, hull: SUBSYSTEM_MAX, sensors: SUBSYSTEM_MAX }
+  /** Living crew aboard. The starting ship runs itself; larger ships (future) will need crew. */
+  crew = 0
+  /** Outstanding wage debts to the families of crew who died from failed life support. */
+  private restitutions: Restitution[] = []
+  /** Per-day cost ledger, keyed by galaxy-day; pruned to the trailing budget window. */
+  private costHistory: Map<number, DailyLedger> = new Map()
+  /** Per-day snapshots of capital tied up in cargo (basis value); pruned to the window. */
+  private cargoValueSamples: Map<number, number> = new Map()
 
   galaxyRates: Record<CommodityId, number> = {} as Record<CommodityId, number>
   localRates: RateTable = {}
@@ -318,12 +375,19 @@ class GameStateImpl {
   }
 
   get cargoFree(): number {
-    return this.cargoCapacity - this.cargoUsed
+    // Hull wear can shrink capacity below what's already aboard; never report negative space.
+    return Math.max(0, this.cargoCapacity - this.cargoUsed)
   }
 
-  /** Cargo capacity: the bare hull plus every installed Cargo Bay. */
+  /**
+   * Cargo capacity: the bare hull plus every installed Cargo Bay, trimmed by hull
+   * wear. A breached hull loses up to {@link HULL_MAX_CARGO_LOSS} of its hold at
+   * 0 integrity (where travel is blocked anyway).
+   */
   get cargoCapacity(): number {
-    return BASE_CARGO_CAPACITY + this.installedExpansions['cargo-bay'] * CARGO_BAY_CAPACITY
+    const raw = BASE_CARGO_CAPACITY + this.installedExpansions['cargo-bay'] * CARGO_BAY_CAPACITY
+    const hullWear = 1 - this.subsystems.hull / SUBSYSTEM_MAX
+    return Math.floor(raw * (1 - hullWear * HULL_MAX_CARGO_LOSS))
   }
 
   /** Fuel capacity: the bare tank plus every installed Fuel Tank. */
@@ -403,6 +467,11 @@ class GameStateImpl {
     return this.cargoBasis[commodityId] / held
   }
 
+  /** Total credits paid for everything currently in the hold — capital tied up in cargo. */
+  get cargoBasisTotal(): number {
+    return Object.values(this.cargoBasis).reduce((sum, v) => sum + v, 0)
+  }
+
   getBasisDeltaPercent(commodityId: CommodityId, systemId = this.currentSystemId): number | null {
     const basis = this.getAverageBasis(commodityId)
     if (basis === null) return null
@@ -447,25 +516,50 @@ class GameStateImpl {
   }
 
   /** Galaxy-date advance for a jump to systemId (fractional days), used both to
-   * commit the jump and to animate the clock while the ship is in transit. */
+   * commit the jump and to animate the clock while the ship is in transit.
+   * Engine wear stretches the trip: a battered drive is slower. */
   jumpDateAdvance(systemId: string, fromSystemId = this.currentSystemId): number {
     const from = SYSTEMS.find((s) => s.id === fromSystemId)!
     const to = SYSTEMS.find((s) => s.id === systemId)!
-    return Math.hypot(to.x - from.x, to.y - from.y) / GALAXY_DATE_DIVISOR / this.travelSpeedMultiplier
+    const base = Math.hypot(to.x - from.x, to.y - from.y) / GALAXY_DATE_DIVISOR / this.travelSpeedMultiplier
+    const engineWear = 1 - this.subsystems.engines / SUBSYSTEM_MAX
+    return base * (1 + engineWear * ENGINE_MAX_SLOWDOWN)
+  }
+
+  /** Whether the ship is mechanically able to jump: engines and hull both above 0. */
+  canTravelPhysically(): boolean {
+    return this.subsystems.engines > 0 && this.subsystems.hull > 0
   }
 
   travelTo(systemId: string): boolean {
     if (systemId === this.currentSystemId) return false
     if (!this.hasLicense(systemId)) return false
+    if (!this.canTravelPhysically()) return false
     const current = SYSTEMS.find((s) => s.id === this.currentSystemId)!
     if (!current.connections.includes(systemId)) return false
     const cost = this.jumpFuelCost(systemId)
     if (cost > this.fuel) return false
     this.fuel -= cost
-    this.galaxyDate += this.jumpDateAdvance(systemId)
+    const days = this.jumpDateAdvance(systemId)
+    this.galaxyDate += days
     this.currentSystemId = systemId
+    this.applyTravelDamage(days)
     this.advanceMarketTick()
     return true
+  }
+
+  /**
+   * Wears the ship a little for a jump: each subsystem independently has a
+   * {@link TRAVEL_DAMAGE_CHANCE} chance of taking a small random hit, scaled by
+   * the days spent in transit so longer hauls bite harder. Integrity floors at 0.
+   */
+  private applyTravelDamage(days: number) {
+    for (const id of SUBSYSTEM_IDS) {
+      if (Math.random() >= TRAVEL_DAMAGE_CHANCE) continue
+      const perDay = TRAVEL_DAMAGE_MIN + Math.random() * (TRAVEL_DAMAGE_MAX - TRAVEL_DAMAGE_MIN)
+      const damage = perDay * Math.max(1, days)
+      this.subsystems[id] = Math.max(0, this.subsystems[id] - damage)
+    }
   }
 
   /** Whether the player may legally travel to (and dock at) a system. */
@@ -480,9 +574,17 @@ class GameStateImpl {
    */
   isSystemVisible(systemId: string): boolean {
     if (this.hasLicense(systemId)) return true
+    // Neighboring (unlicensed) systems are only picked up if the ship's sensors
+    // can still reach them. Wear shrinks that reach from a full sweep down to
+    // nothing, so distant neighbors fade out first and none show at 0 integrity.
+    const range = (this.subsystems.sensors / SUBSYSTEM_MAX) * SENSOR_FULL_RANGE
+    if (range <= 0) return false
+    const target = SYSTEMS.find((s) => s.id === systemId)
+    if (!target) return false
     for (const id of this.licensedSystemIds) {
       const licensed = SYSTEMS.find((s) => s.id === id)
-      if (licensed?.connections.includes(systemId)) return true
+      if (!licensed?.connections.includes(systemId)) continue
+      if (Math.hypot(target.x - licensed.x, target.y - licensed.y) <= range) return true
     }
     return false
   }
@@ -551,7 +653,75 @@ class GameStateImpl {
       this.updateMigrationMomentum(popBefore)
       this.runGalaxyGrowthDay()
       this.decayPlayerInfluence()
+      this.runShipDay(this.processedDay)
       this.processedDay += 1
+    }
+  }
+
+  /**
+   * One day of the ship's running costs: crew deaths from failed life support,
+   * crew wages, restitution owed to the families of the dead, and a snapshot of
+   * the capital tied up in cargo. Each cost is deducted from credits and booked
+   * to the day's ledger; the trailing budget window is then trimmed.
+   */
+  private runShipDay(day: number) {
+    // A failed life-support system claims one crew member per day. Their wage is
+    // then owed to their next of kin for RESTITUTION_DAYS.
+    if (this.subsystems['life-support'] <= 0 && this.crew > 0) {
+      this.crew -= 1
+      this.restitutions.push({ dailyAmount: CREW_DAILY_WAGE, daysRemaining: RESTITUTION_DAYS })
+    }
+
+    // Crew wages.
+    const wages = this.crew * CREW_DAILY_WAGE
+    if (wages > 0) {
+      this.credits -= wages
+      this.bookCost(day, 'crew', wages)
+    }
+
+    // Restitution: pay every outstanding obligation, then retire the paid-off ones.
+    let restitutionToday = 0
+    for (const debt of this.restitutions) {
+      restitutionToday += debt.dailyAmount
+      debt.daysRemaining -= 1
+    }
+    if (restitutionToday > 0) {
+      this.credits -= restitutionToday
+      this.bookCost(day, 'restitution', restitutionToday)
+    }
+    this.restitutions = this.restitutions.filter((d) => d.daysRemaining > 0)
+
+    // Snapshot the capital sitting in the hold, for the average-balance line.
+    this.cargoValueSamples.set(day, this.cargoBasisTotal)
+
+    this.pruneBudgetHistory(day)
+  }
+
+  /** Adds `amount` to a day's ledger under `category`, creating the day's row as needed. */
+  private bookCost(day: number, category: CostCategory, amount: number) {
+    let ledger = this.costHistory.get(day)
+    if (!ledger) {
+      ledger = { fuel: 0, crew: 0, repairs: 0, restitution: 0 }
+      this.costHistory.set(day, ledger)
+    }
+    ledger[category] += amount
+  }
+
+  /** Records a cost incurred right now (fuel, repairs) against the current galaxy-day. */
+  private recordCost(category: CostCategory, amount: number) {
+    const day = Math.floor(this.galaxyDate)
+    this.bookCost(day, category, amount)
+    this.pruneBudgetHistory(day)
+  }
+
+  /** Drops ledger rows and cargo samples that have fallen out of the trailing window. */
+  private pruneBudgetHistory(currentDay: number) {
+    const cutoff = currentDay - BUDGET_WINDOW_DAYS
+    for (const day of this.costHistory.keys()) {
+      if (day <= cutoff) this.costHistory.delete(day)
+    }
+    for (const day of this.cargoValueSamples.keys()) {
+      if (day <= cutoff) this.cargoValueSamples.delete(day)
     }
   }
 
@@ -721,17 +891,103 @@ class GameStateImpl {
     }
   }
 
-  /** Temporary flat-rate refuel: pay this to top the tank back up to {@link maxFuel}. */
+  /** Credits to top the tank back up to {@link maxFuel}: the missing fuel priced per unit. */
   refuelCost(): number {
-    return REFUEL_COST
+    return Math.ceil((this.maxFuel - this.fuel) * REFUEL_PRICE_PER_UNIT)
   }
 
   refuel(): boolean {
     if (this.fuel >= this.maxFuel) return false
-    if (this.credits < REFUEL_COST) return false
-    this.credits -= REFUEL_COST
+    const cost = this.refuelCost()
+    if (this.credits < cost) return false
+    this.credits -= cost
     this.fuel = this.maxFuel
+    this.recordCost('fuel', cost)
     return true
+  }
+
+  // --- Repairs ---
+
+  /** Credits to restore one subsystem to full: its missing integrity times the per-point rate. */
+  repairCost(id: SubsystemId): number {
+    return Math.ceil((SUBSYSTEM_MAX - this.subsystems[id]) * REPAIR_COST_PER_POINT)
+  }
+
+  /** Whether a subsystem is worn and the player can afford to fully repair it. */
+  canRepair(id: SubsystemId): boolean {
+    return this.subsystems[id] < SUBSYSTEM_MAX && this.credits >= this.repairCost(id)
+  }
+
+  /** Fully repairs one subsystem, booking the spend to the Ship Repairs budget line. */
+  repair(id: SubsystemId): boolean {
+    if (!this.canRepair(id)) return false
+    const cost = this.repairCost(id)
+    this.credits -= cost
+    this.subsystems[id] = SUBSYSTEM_MAX
+    this.recordCost('repairs', cost)
+    return true
+  }
+
+  /** Combined cost to bring every worn subsystem back to full. */
+  repairAllCost(): number {
+    return SUBSYSTEM_IDS.reduce((sum, id) => sum + this.repairCost(id), 0)
+  }
+
+  /** Whether anything needs repair and the player can afford to fix it all at once. */
+  canRepairAll(): boolean {
+    const cost = this.repairAllCost()
+    return cost > 0 && this.credits >= cost
+  }
+
+  /** Repairs every subsystem to full in one transaction. */
+  repairAll(): boolean {
+    if (!this.canRepairAll()) return false
+    const cost = this.repairAllCost()
+    this.credits -= cost
+    for (const id of SUBSYSTEM_IDS) this.subsystems[id] = SUBSYSTEM_MAX
+    this.recordCost('repairs', cost)
+    return true
+  }
+
+  // --- Budget (trailing averages) ---
+
+  /** Whole galaxy-days elapsed since the game began; the divisor for trailing averages. */
+  get budgetElapsedDays(): number {
+    return Math.floor(this.galaxyDate)
+  }
+
+  /** Whether restitution is currently being paid, so the Budget can hide the line otherwise. */
+  get hasActiveRestitution(): boolean {
+    return this.restitutions.length > 0
+  }
+
+  /**
+   * A cost category's trailing average, expressed per {@link BUDGET_PERIOD_DAYS}
+   * (a 30-day month). The window is the last {@link BUDGET_WINDOW_DAYS}, but early
+   * on it divides only by the days actually elapsed — so opening days aren't
+   * diluted by pre-game zeros. Returns null on day 0, where there's nothing to
+   * average yet (the page shows an em dash).
+   */
+  budgetMonthlyAverage(category: CostCategory): number | null {
+    const elapsed = this.budgetElapsedDays
+    if (elapsed <= 0) return null
+    const windowDays = Math.min(elapsed, BUDGET_WINDOW_DAYS)
+    let sum = 0
+    for (const ledger of this.costHistory.values()) sum += ledger[category]
+    return (sum / windowDays) * BUDGET_PERIOD_DAYS
+  }
+
+  /**
+   * The average capital tied up in cargo over the trailing window — a balance,
+   * not a flow, so it isn't scaled to a monthly period. Returns null on day 0.
+   */
+  cargoAverageBalance(): number | null {
+    const elapsed = this.budgetElapsedDays
+    if (elapsed <= 0) return null
+    const windowDays = Math.min(elapsed, BUDGET_WINDOW_DAYS)
+    let sum = 0
+    for (const value of this.cargoValueSamples.values()) sum += value
+    return sum / windowDays
   }
 
   /** Credits refunded for selling one installed expansion back: half its price. */

@@ -4,7 +4,8 @@ import { BootScene } from './scenes/BootScene'
 import { MapScene } from './scenes/MapScene'
 import { MarketScene } from './scenes/MarketScene'
 import { FinancesScene } from './scenes/FinancesScene'
-import { FuelDepotScene } from './scenes/FuelDepotScene'
+import { BudgetScene } from './scenes/BudgetScene'
+import { DepotScene } from './scenes/DepotScene'
 import { OutfitterScene } from './scenes/OutfitterScene'
 import { ContractsScene, ShipyardScene } from './scenes/PlaceholderScenes'
 
@@ -17,5 +18,5 @@ new Phaser.Game({
   scale: {
     mode: Phaser.Scale.RESIZE,
   },
-  scene: [BootScene, MapScene, MarketScene, FinancesScene, ContractsScene, ShipyardScene, OutfitterScene, FuelDepotScene],
+  scene: [BootScene, MapScene, MarketScene, FinancesScene, BudgetScene, ContractsScene, ShipyardScene, OutfitterScene, DepotScene],
 })
