@@ -214,13 +214,18 @@ export class MapScene extends Phaser.Scene {
     this.stationNames = []
     this.stationStatuses = []
 
+    // A ship with a dead engine or breached hull can't jump anywhere; this gates
+    // every destination equally, so compute it once.
+    const canMove = gameState.canTravelPhysically()
+
     for (const system of visibleSystems) {
       const isHere = system.id === here.id
       const licensed = gameState.hasLicense(system.id)
       const isAdjacent = here.connections.includes(system.id)
-      // Travel needs a license, an adjacency to the current system, and the fuel.
+      // Travel needs a license, an adjacency to the current system, the fuel, and
+      // a ship that can physically make the jump.
       const hasFuel = isAdjacent && gameState.jumpFuelCost(system.id) <= gameState.fuel
-      const canTravel = isAdjacent && licensed && hasFuel
+      const canTravel = isAdjacent && licensed && hasFuel && canMove
       const fillColor = isHere ? 0x44ff88 : canTravel ? 0x4488ff : 0x445566
 
       const circle = this.add.circle(system.x, system.y, 16, fillColor)
@@ -246,9 +251,11 @@ export class MapScene extends Phaser.Scene {
           ? 'Travel'
           : !licensed
             ? 'License Required'
-            : isAdjacent
-              ? 'Not Enough Fuel'
-              : 'Too Far'
+            : !isAdjacent
+              ? 'Too Far'
+              : !hasFuel
+                ? 'Not Enough Fuel'
+                : 'Ship Disabled'
       const statusText = this.add
         .text(system.x, system.y + 51 * markerScale, statusLabel, {
           fontFamily: FONT_MONO,
