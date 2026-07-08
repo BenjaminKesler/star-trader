@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { gameState } from '../game/GameState'
+import { SUBSYSTEM_IDS } from '../data/subsystems'
 import { FONT_DISPLAY, FONT_MONO } from './fonts'
 
 export interface TabDef {
@@ -13,9 +14,10 @@ export const TABS: TabDef[] = [
   { label: 'Market', scene: 'MarketScene' },
   { label: 'Contracts', scene: 'ContractsScene' },
   { label: 'Finances', scene: 'FinancesScene' },
+  { label: 'Budget', scene: 'BudgetScene' },
   { label: 'Shipyard', scene: 'ShipyardScene' },
   { label: 'Outfitter', scene: 'OutfitterScene' },
-  { label: 'Fuel Depot', scene: 'FuelDepotScene' },
+  { label: 'Depot', scene: 'DepotScene' },
 ]
 
 /** Object name of the top-bar galaxy-date text, so scenes can find and update it live. */
@@ -43,6 +45,26 @@ const CHEATS: Cheat[] = [
     label: 'Unlock all travel licenses',
     apply: () => {
       gameState.grantAllLicenses()
+    },
+  },
+  {
+    label: 'Hire 5 crew',
+    apply: () => {
+      gameState.crew += 5
+    },
+  },
+  {
+    label: 'Damage all systems (−40)',
+    apply: () => {
+      for (const id of SUBSYSTEM_IDS) {
+        gameState.subsystems[id] = Math.max(0, gameState.subsystems[id] - 40)
+      }
+    },
+  },
+  {
+    label: 'Fail life support',
+    apply: () => {
+      gameState.subsystems['life-support'] = 0
     },
   },
 ]
