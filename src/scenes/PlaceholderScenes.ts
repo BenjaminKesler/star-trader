@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { createTabBar, TOP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
+import { FONT_DISPLAY } from '../ui/fonts'
 
 /**
  * A stub scene that shows only the tab bar and its own title, centered.
@@ -19,7 +20,8 @@ abstract class PlaceholderScene extends Phaser.Scene {
 
     this.add
       .text(this.scale.width / 2, (TOP_BAR_HEIGHT + this.scale.height - BOTTOM_BAR_HEIGHT) / 2, this.title, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_DISPLAY,
+        fontStyle: 'bold',
         fontSize: '48px',
         color: '#ffffff',
       })

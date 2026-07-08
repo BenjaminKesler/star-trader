@@ -3,6 +3,7 @@ import { COMMODITIES, type Commodity } from '../data/commodities'
 import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
 import { BOTTOM_BAR_HEIGHT, CREDITS_NAME, createTabBar } from '../ui/TabBar'
+import { FONT_DISPLAY, FONT_MONO } from '../ui/fonts'
 import { formatDelta } from '../ui/format'
 
 const ROW_HEIGHT = 60
@@ -88,14 +89,15 @@ export class MarketScene extends Phaser.Scene {
 
     this.add
       .text(this.scale.width / 2, 75, `${here.name} Market — Pop. ${formatPopulation(gameState.getPopulation(here.id))}`, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_DISPLAY,
+        fontStyle: 'bold',
         fontSize: '36px',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0)
 
     this.hud = this.add.text(30, 70, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '24px',
       color: '#9adfff',
     })
@@ -111,7 +113,7 @@ export class MarketScene extends Phaser.Scene {
     // measured at the design font size (27px), so widths come out in the same
     // "design units" as the column offsets; every column from divider 1 rightward
     // then slides over by the extra room the names need.
-    const measurer = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: '27px' }).setVisible(false)
+    const measurer = this.add.text(0, 0, '', { fontFamily: FONT_MONO, fontSize: '27px' }).setVisible(false)
     let widestName = 0
     for (const commodity of COMMODITIES) {
       measurer.setText(commodity.name)
@@ -164,7 +166,7 @@ export class MarketScene extends Phaser.Scene {
       this.rowBackgrounds[commodity.id] = rowBg
 
       const nameText = this.add.text(nameX, y, commodity.name, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: rowFontSize,
         color: '#ffffff',
       })
@@ -177,7 +179,7 @@ export class MarketScene extends Phaser.Scene {
 
       const priceText = this.add
         .text(priceX, y, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#cccccc',
         })
@@ -186,7 +188,7 @@ export class MarketScene extends Phaser.Scene {
 
       const stockText = this.add
         .text(stockX, y, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#cccccc',
         })
@@ -195,7 +197,7 @@ export class MarketScene extends Phaser.Scene {
 
       const buyOneBtn = this.add
         .text(buyOneX, y, 'Buy', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#44ff88',
           backgroundColor: '#113322',
@@ -218,7 +220,7 @@ export class MarketScene extends Phaser.Scene {
 
       const buyAllBtn = this.add
         .text(buyAllX, y, 'All', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#44ff88',
           backgroundColor: '#113322',
@@ -236,7 +238,7 @@ export class MarketScene extends Phaser.Scene {
 
       const basisText = this.add
         .text(basisX, y, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#888888',
         })
@@ -245,7 +247,7 @@ export class MarketScene extends Phaser.Scene {
 
       const inventoryText = this.add
         .text(inventoryX, y, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#cccccc',
         })
@@ -254,7 +256,7 @@ export class MarketScene extends Phaser.Scene {
 
       const sellOneBtn = this.add
         .text(sellOneX, y, 'Sell', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#ff8844',
           backgroundColor: '#332211',
@@ -275,7 +277,7 @@ export class MarketScene extends Phaser.Scene {
 
       const sellAllBtn = this.add
         .text(sellAllX, y, 'All', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: rowFontSize,
           color: '#ff8844',
           backgroundColor: '#332211',
@@ -318,7 +320,7 @@ export class MarketScene extends Phaser.Scene {
 
     this.upgradeButton = this.add
       .text(this.scale.width / 2, this.footerY, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '27px',
         color: '#66ccff',
         backgroundColor: '#112233',
@@ -385,7 +387,7 @@ export class MarketScene extends Phaser.Scene {
     bg.setStrokeStyle(1.5, 0x4488ff, 0.9)
     const text = this.add
       .text(FLYOUT_PAD_X, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '18px',
         color: '#cfefff',
       })
@@ -505,7 +507,7 @@ export class MarketScene extends Phaser.Scene {
       priceText?.setText(`${price}cr ${formatDelta(percentOffBase)}`)
       priceText?.setColor(percentOffBase > 0 ? '#ff8844' : percentOffBase < 0 ? '#44ff88' : '#cccccc')
 
-      stockText?.setText(`(${stock})`)
+      stockText?.setText(`(${stock.toLocaleString()})`)
 
       const basisDelta = gameState.getBasisDeltaPercent(commodity.id)
       if (basisDelta === null) {
@@ -517,7 +519,7 @@ export class MarketScene extends Phaser.Scene {
         basisText?.setColor(roundedDelta > 0 ? '#44ff88' : roundedDelta < 0 ? '#ff8844' : '#ffffff')
       }
 
-      inventoryText?.setText(`(${held})`)
+      inventoryText?.setText(`(${held.toLocaleString()})`)
 
       buyOneBtn?.setText(multiplier === 1 ? 'Buy' : `x${multiplier}`)
       sellOneBtn?.setText(multiplier === 1 ? 'Sell' : `x${multiplier}`)

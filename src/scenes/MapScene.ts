@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { ZOOM_FRAME_DIST, SYSTEMS, type StarSystem } from '../data/systems'
 import { gameState } from '../game/GameState'
 import { createTabBar, GALAXY_DATE_NAME } from '../ui/TabBar'
+import { FONT_MONO } from '../ui/fonts'
 
 const VIEW_PAD = 135
 /** Empty margin (world units) kept around the systems when bounding the camera. */
@@ -95,7 +96,7 @@ export class MapScene extends Phaser.Scene {
     this.homeY = here.y
 
     this.hud = this.add.text(30, 70, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_MONO,
       fontSize: '24px',
       color: '#9adfff',
     })
@@ -218,7 +219,7 @@ export class MapScene extends Phaser.Scene {
 
       const nameText = this.add
         .text(system.x, system.y - 60 * markerScale, system.name, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '21px',
           color: isHere || canTravel ? '#ffffff' : '#778899',
         })
@@ -236,7 +237,7 @@ export class MapScene extends Phaser.Scene {
             : 'Too Far'
       const statusText = this.add
         .text(system.x, system.y + 51 * markerScale, statusLabel, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '18px',
           color: isHere ? '#44ff88' : canTravel ? '#aaaaaa' : '#556677',
         })
@@ -328,7 +329,7 @@ export class MapScene extends Phaser.Scene {
     bg.setStrokeStyle(1.5, 0x4488ff, 0.9)
     const text = this.add
       .text(FLYOUT_PAD_X, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '18px',
         color: '#cfefff',
       })

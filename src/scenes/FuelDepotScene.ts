@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { gameState } from '../game/GameState'
 import { createTabBar, CREDITS_NAME, TOP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
+import { FONT_DISPLAY, FONT_MONO } from '../ui/fonts'
 
 /**
  * Fuel Depot page. For now this offers a single flat-rate refuel: pay a small
@@ -23,7 +24,8 @@ export class FuelDepotScene extends Phaser.Scene {
 
     this.add
       .text(centerX, 75, 'Fuel Depot', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_DISPLAY,
+        fontStyle: 'bold',
         fontSize: '36px',
         color: '#ffffff',
       })
@@ -31,7 +33,7 @@ export class FuelDepotScene extends Phaser.Scene {
 
     this.fuelText = this.add
       .text(centerX, centerY - 60, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '28px',
         color: '#9adfff',
       })
@@ -39,7 +41,7 @@ export class FuelDepotScene extends Phaser.Scene {
 
     this.refuelButton = this.add
       .text(centerX, centerY + 20, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '27px',
         color: '#66ccff',
         backgroundColor: '#112233',

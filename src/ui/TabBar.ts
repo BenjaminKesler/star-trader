@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { gameState } from '../game/GameState'
+import { FONT_MONO } from './fonts'
 
 export interface TabDef {
   label: string
@@ -58,7 +59,7 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
   segments.forEach((text, i) => {
     const seg = scene.add
       .text((width * (2 * i + 1)) / (segments.length * 2), TOP_BAR_HEIGHT / 2, text, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '22px',
         color: '#ffffff',
       })
@@ -81,7 +82,7 @@ export function createTabBar(scene: Phaser.Scene, activeScene: string): Phaser.G
     const isActive = tab.scene === activeScene
     const btn = scene.add
       .text(x, bottomTop + BOTTOM_BAR_HEIGHT / 2, tab.label, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '22px',
         color: isActive ? '#ffffff' : '#7a8ba0',
         backgroundColor: isActive ? '#1c2c44' : undefined,

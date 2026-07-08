@@ -2,13 +2,16 @@ import Phaser from 'phaser'
 import { createTabBar, BOTTOM_BAR_HEIGHT } from '../ui/TabBar'
 import { SYSTEMS, formatPopulation } from '../data/systems'
 import { gameState } from '../game/GameState'
+import { FONT_DISPLAY, FONT_MONO } from '../ui/fonts'
 import { formatDelta } from '../ui/format'
 
 const ROW_HEIGHT = 50
-/** Y of the column-header labels, just above the scrolling list. */
-const HEADER_Y = 196
-/** Y of the top of the scrolling system list. */
-const ROW_START_Y = 224
+/** Y of the top of the column-header row, a full-height band above the list. */
+const HEADER_ROW_TOP = 196
+/** Y of the vertically-centered column-header labels. */
+const HEADER_Y = HEADER_ROW_TOP + ROW_HEIGHT / 2
+/** Y of the top of the scrolling system list, just below the header row. */
+const ROW_START_Y = HEADER_ROW_TOP + ROW_HEIGHT
 /** Width of the scrollbar track drawn at the right edge of the table. */
 const SCROLLBAR_WIDTH = 10
 /** Gap kept below the list before the bottom tab bar. */
@@ -31,6 +34,7 @@ const TREND_STYLE: Record<'up' | 'down' | 'flat', { glyph: string; color: string
 const ROW_COLOR_EVEN = 0x0c1424
 const ROW_COLOR_ODD = 0x121d33
 const GALAXY_ROW_COLOR = 0x1c2c44
+const HEADER_ROW_COLOR = 0x162238
 
 interface SystemRow {
   bg: Phaser.GameObjects.Rectangle
@@ -42,6 +46,24 @@ interface SystemRow {
   worth: Phaser.GameObjects.Text
 }
 
+interface RankedSystem {
+  name: string
+  productionPercent: number
+  population: number
+  trend: 'up' | 'down' | 'flat'
+  worth: number
+}
+
+type SortKey = 'name' | 'productionPercent' | 'population' | 'worth'
+
+/** Each sortable column, with the header label and its natural first-click direction. */
+const SORT_COLUMNS: { key: SortKey; label: string; defaultAscending: boolean }[] = [
+  { key: 'name', label: 'System', defaultAscending: true },
+  { key: 'productionPercent', label: 'Production', defaultAscending: false },
+  { key: 'population', label: 'Population', defaultAscending: false },
+  { key: 'worth', label: 'Net Worth', defaultAscending: false },
+]
+
 /**
  * The Finances page. A pinned header shows the galaxy-wide net worth — the
  * combined credit value of every system's market — above a scrolling list of
@@ -49,14 +71,14 @@ interface SystemRow {
  */
 export class FinancesScene extends Phaser.Scene {
   private rows: SystemRow[] = []
-  /** Systems paired with production %, population and net worth, sorted richest-first (fixed per visit). */
-  private ranked: {
-    name: string
-    productionPercent: number
-    population: number
-    trend: 'up' | 'down' | 'flat'
-    worth: number
-  }[] = []
+  /** Systems paired with production %, population and net worth (fixed per visit), sorted by the active column. */
+  private ranked: RankedSystem[] = []
+
+  /** The column the list is sorted by, and whether ascending. */
+  private sortKey: SortKey = 'worth'
+  private sortAscending = false
+  /** Clickable column headers, so the active one can show a sort arrow. */
+  private headerTexts: Partial<Record<SortKey, Phaser.GameObjects.Text>> = {}
 
   private galaxyValue!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
@@ -87,7 +109,8 @@ export class FinancesScene extends Phaser.Scene {
 
     this.add
       .text(this.scale.width / 2, 75, 'Finances', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_DISPLAY,
+        fontStyle: 'bold',
         fontSize: '36px',
         color: '#ffffff',
       })
@@ -99,7 +122,8 @@ export class FinancesScene extends Phaser.Scene {
       population: gameState.getPopulation(s.id),
       trend: gameState.getPopulationTrend(s.id),
       worth: Math.round(gameState.systemNetWorth(s.id)),
-    })).sort((a, b) => b.worth - a.worth)
+    }))
+    this.sortRanked()
 
     // Table geometry: capped at the design width and centered.
     this.tableWidth = Math.min(DESIGN_TABLE_WIDTH, this.scale.width - TABLE_MARGIN * 2)
@@ -120,25 +144,45 @@ export class FinancesScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x3a5a8a)
     this.add
       .text(this.nameX, galaxyY + ROW_HEIGHT / 2, 'Galaxy Net Worth', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '24px',
         color: '#ffffff',
       })
       .setOrigin(0, 0.5)
     this.galaxyValue = this.add
       .text(this.worthX, galaxyY + ROW_HEIGHT / 2, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '24px',
         color: '#9adfff',
       })
       .setOrigin(1, 0.5)
 
-    // Column headers for the scrolling list below.
-    const headerStyle = { fontFamily: 'monospace', fontSize: '16px', color: '#7a93b8' }
-    this.add.text(this.nameX, HEADER_Y, 'System', headerStyle).setOrigin(0, 0.5)
-    this.add.text(this.productionX, HEADER_Y, 'Production', headerStyle).setOrigin(1, 0.5)
-    this.add.text(this.populationX, HEADER_Y, 'Population', headerStyle).setOrigin(1, 0.5)
-    this.add.text(this.worthX, HEADER_Y, 'Net Worth', headerStyle).setOrigin(1, 0.5)
+    // Header row: a full-height band matching the data rows, sitting just below
+    // the galaxy header and above the scrolling list.
+    this.add
+      .rectangle(this.tableLeft, HEADER_ROW_TOP, this.tableWidth, ROW_HEIGHT, HEADER_ROW_COLOR)
+      .setOrigin(0, 0)
+
+    // Column headers double as sort controls: clicking one sorts the list by that
+    // column, and clicking the active column again reverses the direction.
+    // Match the data-row font size (22px) but bold, so the header row reads as a heading.
+    const headerStyle = { fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: '#7a93b8' }
+    const headerX: Record<SortKey, number> = {
+      name: this.nameX,
+      productionPercent: this.productionX,
+      population: this.populationX,
+      worth: this.worthX,
+    }
+    for (const column of SORT_COLUMNS) {
+      // The name header is left-aligned; the numeric headers are right-aligned.
+      const originX = column.key === 'name' ? 0 : 1
+      const header = this.add
+        .text(headerX[column.key], HEADER_Y, column.label, headerStyle)
+        .setOrigin(originX, 0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.sortBy(column.key))
+      this.headerTexts[column.key] = header
+    }
 
     // How many system rows fit between the header and the bottom bar.
     const bandBottom = this.scale.height - BOTTOM_BAR_HEIGHT - BAND_BOTTOM_GAP
@@ -152,21 +196,21 @@ export class FinancesScene extends Phaser.Scene {
         .setOrigin(0, 0)
       const name = this.add
         .text(this.nameX, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '22px',
           color: '#ffffff',
         })
         .setOrigin(0, 0.5)
       const production = this.add
         .text(this.productionX, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '22px',
           color: '#cccccc',
         })
         .setOrigin(1, 0.5)
       const population = this.add
         .text(this.populationX, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '22px',
           color: '#cccccc',
         })
@@ -174,14 +218,14 @@ export class FinancesScene extends Phaser.Scene {
       // Trend arrow sits just to the right of the (right-aligned) population figure.
       const trend = this.add
         .text(this.populationX + TREND_GAP, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '22px',
           color: '#cccccc',
         })
         .setOrigin(0, 0.5)
       const worth = this.add
         .text(this.worthX, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           fontSize: '22px',
           color: '#cccccc',
         })
@@ -214,6 +258,53 @@ export class FinancesScene extends Phaser.Scene {
     this.scene.restart()
   }
 
+  /**
+   * Sort the list by the given column. Clicking the active column reverses the
+   * direction; switching to a new column uses that column's natural default
+   * (names A→Z, numbers high→low). Resets scroll and repaints.
+   */
+  private sortBy(key: SortKey) {
+    if (key === this.sortKey) {
+      this.sortAscending = !this.sortAscending
+    } else {
+      this.sortKey = key
+      this.sortAscending = SORT_COLUMNS.find((c) => c.key === key)!.defaultAscending
+    }
+    this.sortRanked()
+    this.scrollRow = 0
+    this.refresh()
+  }
+
+  /** Reorder {@link ranked} in place by the active sort column and direction. */
+  private sortRanked() {
+    const key = this.sortKey
+    const dir = this.sortAscending ? 1 : -1
+    this.ranked.sort((a, b) => {
+      let cmp: number
+      if (key === 'name') {
+        cmp = a.name.localeCompare(b.name)
+      } else {
+        cmp = a[key] - b[key]
+      }
+      // Break ties by name so the order stays stable and predictable.
+      if (cmp === 0) cmp = a.name.localeCompare(b.name)
+      return cmp * dir
+    })
+  }
+
+  /** Mark the active column header with a direction arrow; clear the others. */
+  private updateHeaders() {
+    for (const column of SORT_COLUMNS) {
+      const header = this.headerTexts[column.key]
+      if (!header) continue
+      if (column.key === this.sortKey) {
+        header.setText(`${column.label} ${this.sortAscending ? '▲' : '▼'}`).setColor('#9adfff')
+      } else {
+        header.setText(column.label).setColor('#7a93b8')
+      }
+    }
+  }
+
   private maxScrollRow(): number {
     return Math.max(0, this.ranked.length - this.visibleCapacity)
   }
@@ -228,6 +319,7 @@ export class FinancesScene extends Phaser.Scene {
 
   private refresh() {
     this.galaxyValue.setText(`${Math.round(gameState.galaxyNetWorth).toLocaleString()}cr`)
+    this.updateHeaders()
 
     const windowStart = this.scrollRow
     this.rows.forEach((row, i) => {
