@@ -25,23 +25,28 @@ export const ENGINE_SPEED_BONUS = 0.5
 export const CARGO_BAY_CAPACITY = 20
 
 export const EXPANSIONS: Expansion[] = [
-  {
-    id: 'fuel-tank',
-    name: 'Fuel Tank',
-    description: `Expands fuel capacity by ${FUEL_TANK_CAPACITY.toLocaleString()}.`,
-    price: 800,
-  },
+  // Prices are tuned against a competent 20-cargo trader's ~730 cr average
+  // profit per buy/sell trip. The Cargo Bay directly doubles cargo (and so
+  // roughly doubles trip profit), making it the strongest — and priciest —
+  // item; the Engine Upgrade and Fuel Tank are range/speed conveniences with
+  // little direct profit impact, so they sit cheaper, in the requested order.
   {
     id: 'engine-upgrade',
     name: 'Engine Upgrade',
     description: 'Speeds up travel by 50%.',
-    price: 1500,
+    price: 1200,
+  },
+  {
+    id: 'fuel-tank',
+    name: 'Fuel Tank',
+    description: `Expands fuel capacity by ${FUEL_TANK_CAPACITY.toLocaleString()}.`,
+    price: 2400,
   },
   {
     id: 'cargo-bay',
     name: 'Cargo Bay',
     description: `Increases cargo capacity by ${CARGO_BAY_CAPACITY}.`,
-    price: 600,
+    price: 3600,
   },
 ]
 
