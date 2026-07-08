@@ -1,6 +1,13 @@
 import { COMMODITIES, type CommodityId } from '../data/commodities'
 import { SYSTEMS, type StarSystem } from '../data/systems'
 import { rankForNetWorth, type Rank } from '../data/ranks'
+import {
+  CARGO_BAY_CAPACITY,
+  ENGINE_SPEED_BONUS,
+  EXPANSION_BY_ID,
+  FUEL_TANK_CAPACITY,
+  type ExpansionId,
+} from '../data/expansions'
 
 const GALAXY_RATE_MIN = 0.85
 const GALAXY_RATE_MAX = 1.3
@@ -94,8 +101,12 @@ const NO_IMPORTS_PENALTY = 0.5
 /** Each distinct imported good in stock multiplies production by this (compounding). */
 const VARIETY_BONUS_PER_IMPORT = 1.08
 
-const CARGO_UPGRADE_STEP = 20
-const CARGO_UPGRADE_BASE_COST = 600
+/** Cargo hold size of a bare ship, before any Cargo Bay expansions. */
+const BASE_CARGO_CAPACITY = 20
+/** Fuel tank size of a bare ship, before any Fuel Tank expansions. */
+const BASE_MAX_FUEL = 5000
+/** Expansion bays on the starting ship — the ceiling on installed expansions. */
+const STARTING_EXPANSION_BAYS = 2
 
 /** Temporary flat rate to fully refuel, regardless of how empty the tank is. */
 const REFUEL_COST = 10
@@ -183,14 +194,15 @@ class GameStateImpl {
   companyName = 'Unnamed Trading Co.'
   shipName = 'Rusty Hauler'
   credits = 1000
-  fuel = 5000
-  maxFuel = 5000
+  fuel = BASE_MAX_FUEL
   currentSystemId = SYSTEMS[0].id
   galaxyDate = 0
   /** Whole galaxy-days already run through production/consumption. */
   private processedDay = 0
-  cargoCapacity = CARGO_UPGRADE_STEP
-  cargoUpgradeLevel = 0
+  /** Total expansion bays on the ship; installed expansions can't exceed this. */
+  expansionBays = STARTING_EXPANSION_BAYS
+  /** How many of each expansion are currently installed (each uses one bay). */
+  installedExpansions: Record<ExpansionId, number> = { 'fuel-tank': 0, 'engine-upgrade': 0, 'cargo-bay': 0 }
   cargo: CargoHold = emptyCargo()
   private cargoBasis: CargoHold = emptyCargo()
 
@@ -302,6 +314,31 @@ class GameStateImpl {
     return this.cargoCapacity - this.cargoUsed
   }
 
+  /** Cargo capacity: the bare hull plus every installed Cargo Bay. */
+  get cargoCapacity(): number {
+    return BASE_CARGO_CAPACITY + this.installedExpansions['cargo-bay'] * CARGO_BAY_CAPACITY
+  }
+
+  /** Fuel capacity: the bare tank plus every installed Fuel Tank. */
+  get maxFuel(): number {
+    return BASE_MAX_FUEL + this.installedExpansions['fuel-tank'] * FUEL_TANK_CAPACITY
+  }
+
+  /** Travel-time divisor from engines: each Engine Upgrade shortens jumps. */
+  get travelSpeedMultiplier(): number {
+    return 1 + this.installedExpansions['engine-upgrade'] * ENGINE_SPEED_BONUS
+  }
+
+  /** Expansion bays already occupied by installed expansions. */
+  get usedBays(): number {
+    return Object.values(this.installedExpansions).reduce((sum, n) => sum + n, 0)
+  }
+
+  /** Expansion bays still open for new expansions. */
+  get freeBays(): number {
+    return this.expansionBays - this.usedBays
+  }
+
   getPrice(commodityId: CommodityId, systemId = this.currentSystemId): number {
     const base = COMMODITIES.find((c) => c.id === commodityId)!.basePrice
     return Math.round(base * this.galaxyRates[commodityId] * this.localRates[systemId][commodityId])
@@ -407,7 +444,7 @@ class GameStateImpl {
   jumpDateAdvance(systemId: string, fromSystemId = this.currentSystemId): number {
     const from = SYSTEMS.find((s) => s.id === fromSystemId)!
     const to = SYSTEMS.find((s) => s.id === systemId)!
-    return Math.hypot(to.x - from.x, to.y - from.y) / GALAXY_DATE_DIVISOR
+    return Math.hypot(to.x - from.x, to.y - from.y) / GALAXY_DATE_DIVISOR / this.travelSpeedMultiplier
   }
 
   travelTo(systemId: string): boolean {
@@ -642,16 +679,38 @@ class GameStateImpl {
     return true
   }
 
-  cargoUpgradeCost(): number {
-    return Math.round(CARGO_UPGRADE_BASE_COST * Math.pow(1.5, this.cargoUpgradeLevel))
+  /** Credits refunded for selling one installed expansion back: half its price. */
+  expansionRefund(id: ExpansionId): number {
+    return Math.floor(EXPANSION_BY_ID[id].price / 2)
   }
 
-  upgradeCargo(): boolean {
-    const cost = this.cargoUpgradeCost()
-    if (this.credits < cost) return false
-    this.credits -= cost
-    this.cargoCapacity += CARGO_UPGRADE_STEP
-    this.cargoUpgradeLevel += 1
+  /** Whether an expansion can be installed right now: a free bay and the credits. */
+  canInstallExpansion(id: ExpansionId): boolean {
+    return this.freeBays > 0 && this.credits >= EXPANSION_BY_ID[id].price
+  }
+
+  /** Whether an installed expansion can be sold back without stranding cargo. */
+  canRemoveExpansion(id: ExpansionId): boolean {
+    if (this.installedExpansions[id] <= 0) return false
+    // Removing a Cargo Bay shrinks the hold; refuse if that would leave cargo
+    // over the new capacity (fuel, by contrast, simply spills and is clamped).
+    if (id === 'cargo-bay' && this.cargoUsed > this.cargoCapacity - CARGO_BAY_CAPACITY) return false
+    return true
+  }
+
+  installExpansion(id: ExpansionId): boolean {
+    if (!this.canInstallExpansion(id)) return false
+    this.credits -= EXPANSION_BY_ID[id].price
+    this.installedExpansions[id] += 1
+    return true
+  }
+
+  removeExpansion(id: ExpansionId): boolean {
+    if (!this.canRemoveExpansion(id)) return false
+    this.installedExpansions[id] -= 1
+    this.credits += this.expansionRefund(id)
+    // A removed Fuel Tank can drop maxFuel below the current level; spill the rest.
+    if (this.fuel > this.maxFuel) this.fuel = this.maxFuel
     return true
   }
 }

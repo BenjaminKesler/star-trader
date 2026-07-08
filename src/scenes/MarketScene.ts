@@ -9,8 +9,8 @@ import { formatDelta } from '../ui/format'
 const ROW_HEIGHT = 60
 const ROW_START_Y = 240
 
-/** Vertical room reserved below the scrolling table for the upgrade footer. */
-const FOOTER_RESERVE = 120
+/** Breathing room kept below the scrolling table, above the bottom tab bar. */
+const FOOTER_RESERVE = 30
 /** Width of the scrollbar track drawn at the right edge of the table. */
 const SCROLLBAR_WIDTH = 10
 /** Inner padding (screen px) between the hover flyout's text and its border. */
@@ -55,7 +55,6 @@ export class MarketScene extends Phaser.Scene {
   private rowBackgrounds: Partial<Record<string, Phaser.GameObjects.Rectangle>> = {}
   private divider1!: Phaser.GameObjects.Rectangle
   private divider2!: Phaser.GameObjects.Rectangle
-  private upgradeButton!: Phaser.GameObjects.Text
   private scrollTrack!: Phaser.GameObjects.Rectangle
   private scrollThumb!: Phaser.GameObjects.Rectangle
   private flyout!: Phaser.GameObjects.Container
@@ -68,8 +67,6 @@ export class MarketScene extends Phaser.Scene {
   private scrollRow = 0
   /** How many rows fit in the scroll band at the current window height. */
   private visibleCapacity = 1
-  /** Fixed Y for the upgrade footer, just above the bottom tab bar. */
-  private footerY = 0
 
   constructor() {
     super('MarketScene')
@@ -129,9 +126,8 @@ export class MarketScene extends Phaser.Scene {
     const tableLeft = (this.scale.width - tableWidth) / 2
     const tableRight = tableLeft + tableWidth
 
-    // The table scrolls: rows fill the band between the header and the fixed
-    // footer, and only a window of them is shown at once.
-    this.footerY = this.scale.height - BOTTOM_BAR_HEIGHT - 45
+    // The table scrolls: rows fill the band between the header and the bottom
+    // tab bar, and only a window of them is shown at once.
     const bandBottom = this.scale.height - BOTTOM_BAR_HEIGHT - FOOTER_RESERVE
     this.visibleCapacity = Math.max(1, Math.floor((bandBottom - ROW_START_Y) / ROW_HEIGHT))
     this.scrollRow = 0
@@ -317,21 +313,6 @@ export class MarketScene extends Phaser.Scene {
         this.scrollBy(dy > 0 ? 1 : -1)
       },
     )
-
-    this.upgradeButton = this.add
-      .text(this.scale.width / 2, this.footerY, '', {
-        fontFamily: FONT_MONO,
-        fontSize: '27px',
-        color: '#66ccff',
-        backgroundColor: '#112233',
-        padding: { x: 15, y: 9 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        gameState.upgradeCargo()
-        this.refresh()
-      })
 
     this.createFlyout()
 
@@ -531,11 +512,6 @@ export class MarketScene extends Phaser.Scene {
     this.divider2.setSize(3, tableHeight)
 
     this.updateScrollbar(visible.length)
-
-    this.upgradeButton.setY(this.footerY)
-    this.upgradeButton.setText(
-      `Upgrade Cargo Hold (+${20}) — ${gameState.cargoUpgradeCost().toLocaleString()}cr`,
-    )
   }
 
   /** Size and place the scrollbar thumb, or hide the bar when nothing overflows. */

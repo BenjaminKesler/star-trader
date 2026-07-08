@@ -5,7 +5,8 @@ import { MapScene } from './scenes/MapScene'
 import { MarketScene } from './scenes/MarketScene'
 import { FinancesScene } from './scenes/FinancesScene'
 import { FuelDepotScene } from './scenes/FuelDepotScene'
-import { ContractsScene, ShipyardScene, OutfitterScene } from './scenes/PlaceholderScenes'
+import { OutfitterScene } from './scenes/OutfitterScene'
+import { ContractsScene, ShipyardScene } from './scenes/PlaceholderScenes'
 
 new Phaser.Game({
   type: Phaser.AUTO,
