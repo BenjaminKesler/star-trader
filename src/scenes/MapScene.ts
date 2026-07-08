@@ -383,6 +383,7 @@ export class MapScene extends Phaser.Scene {
         `Ship: ${gameState.shipName}`,
         `Fuel: ${formatFuel(fuel, gameState.maxFuel)}`,
         `Cargo: ${gameState.cargoUsed}/${gameState.cargoCapacity}`,
+        `Crew: ${gameState.crew}/${gameState.maxCrew}`,
       ].join('\n'),
     )
   }

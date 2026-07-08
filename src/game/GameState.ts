@@ -106,6 +106,8 @@ const VARIETY_BONUS_PER_IMPORT = 1.08
 const BASE_CARGO_CAPACITY = 20
 /** Fuel tank size of a bare ship, before any Fuel Tank expansions. */
 const BASE_MAX_FUEL = 5000
+/** Crew berths on the starting ship. It runs itself; larger ships (future) will berth crew. */
+const BASE_MAX_CREW = 0
 /** Expansion bays on the starting ship — the ceiling on installed expansions. */
 const STARTING_EXPANSION_BAYS = 2
 
@@ -398,6 +400,11 @@ class GameStateImpl {
   /** Fuel capacity: the bare tank plus every installed Fuel Tank. */
   get maxFuel(): number {
     return BASE_MAX_FUEL + this.installedExpansions['fuel-tank'] * FUEL_TANK_CAPACITY
+  }
+
+  /** Crew berths available on the ship. The bare hull needs none; larger ships (future) will. */
+  get maxCrew(): number {
+    return BASE_MAX_CREW
   }
 
   /** Travel-time divisor from engines: each Engine Upgrade shortens jumps. */
