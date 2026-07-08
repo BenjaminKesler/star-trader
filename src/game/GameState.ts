@@ -111,6 +111,11 @@ const STARTING_EXPANSION_BAYS = 2
 /** Temporary flat rate to fully refuel, regardless of how empty the tank is. */
 const REFUEL_COST = 10
 
+/** Credit cost of a single travel license, sold at the Outfitter. */
+const LICENSE_PRICE = 10_000
+/** Systems the player is licensed to travel to when a new game begins. */
+const STARTING_LICENSES = ['verdant-fields', 'forge-city', 'cinder-yards']
+
 /** Each jump advances the galaxy date by its straight-line distance over this. */
 const GALAXY_DATE_DIVISOR = 150
 const GALAXY_EPOCH_YEAR = 3200
@@ -205,6 +210,8 @@ class GameStateImpl {
   installedExpansions: Record<ExpansionId, number> = { 'fuel-tank': 0, 'engine-upgrade': 0, 'cargo-bay': 0 }
   cargo: CargoHold = emptyCargo()
   private cargoBasis: CargoHold = emptyCargo()
+  /** System ids the player holds a travel license for; travel is gated on holding one. */
+  licensedSystemIds: Set<string> = new Set(STARTING_LICENSES)
 
   galaxyRates: Record<CommodityId, number> = {} as Record<CommodityId, number>
   localRates: RateTable = {}
@@ -449,6 +456,7 @@ class GameStateImpl {
 
   travelTo(systemId: string): boolean {
     if (systemId === this.currentSystemId) return false
+    if (!this.hasLicense(systemId)) return false
     const current = SYSTEMS.find((s) => s.id === this.currentSystemId)!
     if (!current.connections.includes(systemId)) return false
     const cost = this.jumpFuelCost(systemId)
@@ -458,6 +466,53 @@ class GameStateImpl {
     this.currentSystemId = systemId
     this.advanceMarketTick()
     return true
+  }
+
+  /** Whether the player may legally travel to (and dock at) a system. */
+  hasLicense(systemId: string): boolean {
+    return this.licensedSystemIds.has(systemId)
+  }
+
+  /**
+   * Whether a system appears on the map at all: either the player is licensed for
+   * it, or it neighbors a system they are licensed for. Systems two or more jumps
+   * beyond the licensed frontier stay hidden until a nearer license is bought.
+   */
+  isSystemVisible(systemId: string): boolean {
+    if (this.hasLicense(systemId)) return true
+    for (const id of this.licensedSystemIds) {
+      const licensed = SYSTEMS.find((s) => s.id === id)
+      if (licensed?.connections.includes(systemId)) return true
+    }
+    return false
+  }
+
+  /** Flat credit cost of any single travel license. */
+  licenseCost(): number {
+    return LICENSE_PRICE
+  }
+
+  /** Neighbors of the current system the player has yet to license — the Outfitter's stock here. */
+  purchasableLicenseIds(): string[] {
+    const here = SYSTEMS.find((s) => s.id === this.currentSystemId)!
+    return here.connections.filter((id) => !this.hasLicense(id))
+  }
+
+  /** Whether a given license can be bought right now: not already held and affordable. */
+  canBuyLicense(systemId: string): boolean {
+    return !this.hasLicense(systemId) && this.credits >= LICENSE_PRICE
+  }
+
+  buyLicense(systemId: string): boolean {
+    if (!this.canBuyLicense(systemId)) return false
+    this.credits -= LICENSE_PRICE
+    this.licensedSystemIds.add(systemId)
+    return true
+  }
+
+  /** Cheat: grant travel licenses for every system in the galaxy. */
+  grantAllLicenses() {
+    for (const system of SYSTEMS) this.licensedSystemIds.add(system.id)
   }
 
   private advanceMarketTick() {

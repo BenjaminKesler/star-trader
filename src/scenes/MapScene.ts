@@ -70,8 +70,10 @@ export class MapScene extends Phaser.Scene {
     // Bound the camera to the systems' footprint, expanded to match the viewport's
     // aspect ratio around the cluster center. This keeps the cluster centered when
     // fully zoomed out (Phaser's own bounds clamp only centers the binding axis).
-    const xs = SYSTEMS.map((s) => s.x)
-    const ys = SYSTEMS.map((s) => s.y)
+    // Only systems the player has revealed count, so hidden space isn't framed.
+    const visibleSystems = SYSTEMS.filter((s) => gameState.isSystemVisible(s.id))
+    const xs = visibleSystems.map((s) => s.x)
+    const ys = visibleSystems.map((s) => s.y)
     const centerX = (Math.min(...xs) + Math.max(...xs)) / 2
     const centerY = (Math.min(...ys) + Math.max(...ys)) / 2
     let halfW = (Math.max(...xs) - Math.min(...xs)) / 2 + MAP_PADDING
@@ -111,7 +113,11 @@ export class MapScene extends Phaser.Scene {
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height)
     this.cameras.main.ignore([this.hud, flyout, ...tabBar])
 
-    const worldObjects = [...this.drawRoutes(zoom), ...this.drawStations(here, zoom)]
+    const visibleIds = new Set(visibleSystems.map((s) => s.id))
+    const worldObjects = [
+      ...this.drawRoutes(zoom, visibleIds),
+      ...this.drawStations(here, zoom, visibleSystems),
+    ]
     this.uiCamera.ignore(worldObjects)
 
     this.refreshHud()
@@ -179,13 +185,17 @@ export class MapScene extends Phaser.Scene {
     })
   }
 
-  private drawRoutes(zoom: number): Phaser.GameObjects.GameObject[] {
+  /** Draws jump routes, but only between two revealed systems — a route to a
+   * hidden system would give its position away. */
+  private drawRoutes(zoom: number, visibleIds: Set<string>): Phaser.GameObjects.GameObject[] {
     const graphics = this.add.graphics()
     const lineWidth = Phaser.Math.Clamp(1.5 / zoom, 1, 6)
     graphics.lineStyle(lineWidth, 0x334455, 0.6)
     const drawn = new Set<string>()
     for (const system of SYSTEMS) {
+      if (!visibleIds.has(system.id)) continue
       for (const targetId of system.connections) {
+        if (!visibleIds.has(targetId)) continue
         const key = [system.id, targetId].sort().join('|')
         if (drawn.has(key)) continue
         drawn.add(key)
@@ -196,7 +206,7 @@ export class MapScene extends Phaser.Scene {
     return [graphics]
   }
 
-  private drawStations(here: StarSystem, zoom: number): Phaser.GameObjects.GameObject[] {
+  private drawStations(here: StarSystem, zoom: number, visibleSystems: StarSystem[]): Phaser.GameObjects.GameObject[] {
     const objects: Phaser.GameObjects.GameObject[] = []
     const markerScale = 1 / zoom
     // Reset per-run (scene.restart reuses this instance without re-running field initializers).
@@ -204,11 +214,13 @@ export class MapScene extends Phaser.Scene {
     this.stationNames = []
     this.stationStatuses = []
 
-    for (const system of SYSTEMS) {
+    for (const system of visibleSystems) {
       const isHere = system.id === here.id
-      const isReachable = here.connections.includes(system.id)
-      const hasFuel = isReachable && gameState.jumpFuelCost(system.id) <= gameState.fuel
-      const canTravel = isReachable && hasFuel
+      const licensed = gameState.hasLicense(system.id)
+      const isAdjacent = here.connections.includes(system.id)
+      // Travel needs a license, an adjacency to the current system, and the fuel.
+      const hasFuel = isAdjacent && gameState.jumpFuelCost(system.id) <= gameState.fuel
+      const canTravel = isAdjacent && licensed && hasFuel
       const fillColor = isHere ? 0x44ff88 : canTravel ? 0x4488ff : 0x445566
 
       const circle = this.add.circle(system.x, system.y, 16, fillColor)
@@ -232,9 +244,11 @@ export class MapScene extends Phaser.Scene {
         ? 'DOCKED'
         : canTravel
           ? 'Travel'
-          : isReachable
-            ? 'Not Enough Fuel'
-            : 'Too Far'
+          : !licensed
+            ? 'License Required'
+            : isAdjacent
+              ? 'Not Enough Fuel'
+              : 'Too Far'
       const statusText = this.add
         .text(system.x, system.y + 51 * markerScale, statusLabel, {
           fontFamily: FONT_MONO,

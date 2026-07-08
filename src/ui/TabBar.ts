@@ -39,6 +39,12 @@ const CHEATS: Cheat[] = [
       gameState.credits += 1_000_000_000_000
     },
   },
+  {
+    label: 'Unlock all travel licenses',
+    apply: () => {
+      gameState.grantAllLicenses()
+    },
+  },
 ]
 
 /** Object name of the top-bar credits text, so scenes can find and update it live (e.g. after a trade). */
