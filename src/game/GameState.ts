@@ -169,11 +169,6 @@ interface Restitution {
   daysRemaining: number
 }
 
-/** Credit cost of a single travel license, sold at the Outfitter. */
-const LICENSE_PRICE = 10_000
-/** Systems the player is licensed to travel to when a new game begins. */
-const STARTING_LICENSES = ['verdant-fields', 'forge-city', 'cinder-yards']
-
 type RateTable = Record<string, Record<CommodityId, number>>
 type CargoHold = Record<CommodityId, number>
 
@@ -597,9 +592,6 @@ class GameStateImpl {
       const licensed = SYSTEMS.find((s) => s.id === id)
       if (!licensed?.connections.includes(systemId)) continue
       if (Math.hypot(target.x - licensed.x, target.y - licensed.y) <= range) return true
-    for (const id of this.licensedSystemIds) {
-      const licensed = SYSTEMS.find((s) => s.id === id)
-      if (licensed?.connections.includes(systemId)) return true
     }
     return false
   }
