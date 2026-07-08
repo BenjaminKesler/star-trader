@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { gameState } from '../game/GameState'
 import { EXPANSIONS, type ExpansionId } from '../data/expansions'
+import { SYSTEMS } from '../data/systems'
 import { createTabBar, CREDITS_NAME } from '../ui/TabBar'
 import { FONT_DISPLAY, FONT_MONO } from '../ui/fonts'
 
@@ -23,6 +24,7 @@ export class OutfitterScene extends Phaser.Scene {
   private installedTexts: Partial<Record<ExpansionId, Phaser.GameObjects.Text>> = {}
   private installButtons: Partial<Record<ExpansionId, Phaser.GameObjects.Text>> = {}
   private sellButtons: Partial<Record<ExpansionId, Phaser.GameObjects.Text>> = {}
+  private licenseButtons: Record<string, Phaser.GameObjects.Text> = {}
 
   constructor() {
     super('OutfitterScene')
@@ -33,6 +35,7 @@ export class OutfitterScene extends Phaser.Scene {
     this.installedTexts = {}
     this.installButtons = {}
     this.sellButtons = {}
+    this.licenseButtons = {}
 
     createTabBar(this, this.scene.key)
 
@@ -129,6 +132,51 @@ export class OutfitterScene extends Phaser.Scene {
         .setOrigin(1, 0.5)
     })
 
+    // Travel licenses: one row per neighboring system the player hasn't licensed
+    // yet, continuing below the expansion rows. Buying one reveals that system's
+    // own neighbors, so the row set changes — the scene restarts to rebuild it.
+    const licenseIds = gameState.purchasableLicenseIds()
+    licenseIds.forEach((systemId, i) => {
+      const system = SYSTEMS.find((s) => s.id === systemId)!
+      const rowTop = ROWS_START_Y + (EXPANSIONS.length + i) * ROW_HEIGHT
+      const rowCenterY = rowTop + ROW_HEIGHT / 2
+
+      this.add
+        .rectangle(panelLeft, rowTop, panelWidth, ROW_HEIGHT - 12, ROW_COLOR)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1.5, 0x223850)
+
+      this.add
+        .text(panelLeft + 28, rowCenterY - 16, `Travel License: ${system.name}`, {
+          fontFamily: FONT_MONO,
+          fontStyle: 'bold',
+          fontSize: '26px',
+          color: '#ffffff',
+        })
+        .setOrigin(0, 0.5)
+
+      this.add
+        .text(panelLeft + 28, rowCenterY + 16, 'Unlocks travel to this system.', {
+          fontFamily: FONT_MONO,
+          fontSize: '20px',
+          color: '#8fa6c0',
+        })
+        .setOrigin(0, 0.5)
+
+      this.licenseButtons[systemId] = this.add
+        .text(panelRight - 28, rowCenterY, `Buy — ${gameState.licenseCost().toLocaleString()}cr`, {
+          fontFamily: FONT_MONO,
+          fontSize: '22px',
+          color: '#44ff88',
+          backgroundColor: '#113322',
+          padding: { x: 14, y: 8 },
+        })
+        .setOrigin(1, 0.5)
+        .on('pointerdown', () => {
+          if (gameState.buyLicense(systemId)) this.scene.restart()
+        })
+    })
+
     this.refresh()
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this)
@@ -170,6 +218,15 @@ export class OutfitterScene extends Phaser.Scene {
         sellBtn?.setInteractive({ useHandCursor: true }).setAlpha(1)
       } else {
         sellBtn?.disableInteractive().setAlpha(0.4)
+      }
+    }
+
+    for (const systemId of Object.keys(this.licenseButtons)) {
+      const buyBtn = this.licenseButtons[systemId]
+      if (gameState.canBuyLicense(systemId)) {
+        buyBtn.setInteractive({ useHandCursor: true }).setAlpha(1)
+      } else {
+        buyBtn.disableInteractive().setAlpha(0.4)
       }
     }
   }
