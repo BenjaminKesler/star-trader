@@ -624,7 +624,7 @@ class GameStateImpl {
     const available = COMMODITIES.filter((commodity) => stock[commodity.id] > 0)
     if (available.length > 0) {
       const picked = available[Math.floor(Math.random() * available.length)]
-      const consumed = CONSUMPTION_PER_MILLION * this.getPopulation(system.id)
+      const consumed = Math.round(CONSUMPTION_PER_MILLION * this.getPopulation(system.id))
       stock[picked.id] = Math.max(0, stock[picked.id] - consumed)
     }
   }
