@@ -36,7 +36,7 @@ export const SUBSYSTEMS: Subsystem[] = [
   {
     id: 'sensors',
     name: 'Sensors',
-    description: 'Wear hides distant systems; at 0 no neighbors are visible.',
+    description: 'Wear shortens sensor range; at 0 only direct neighbors show.',
   },
 ]
 
