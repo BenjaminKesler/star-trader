@@ -138,8 +138,13 @@ const TRAVEL_DAMAGE_MAX = 5
 const ENGINE_MAX_SLOWDOWN = 1.0
 /** At 0 hull integrity, cargo capacity is cut by this fraction (blocked at 0 anyway). */
 const HULL_MAX_CARGO_LOSS = 0.2
-/** Sensor reach at full integrity, in world units — beyond the jump cap, so full sensors reveal every neighbor. */
-const SENSOR_FULL_RANGE = 1400
+/**
+ * Sensor reach at full integrity, measured in jumps from the current system.
+ * The galaxy graph's diameter is 11, so 12 guarantees full sensors can reach
+ * every system the player could normally see; wear scales this down toward a
+ * floor of 1 (direct neighbors only) at zero integrity.
+ */
+const SENSOR_FULL_JUMP_RANGE = 12
 
 // --- Repairs ---
 /** Credits charged per point of integrity restored at the Depot. */
@@ -575,25 +580,65 @@ class GameStateImpl {
   }
 
   /**
-   * Whether a system appears on the map at all: either the player is licensed for
-   * it, or it neighbors a system they are licensed for. Systems two or more jumps
-   * beyond the licensed frontier stay hidden until a nearer license is bought.
+   * How far the sensors can currently see, in jumps from the current system.
+   * Full integrity reveals the whole galaxy ({@link SENSOR_FULL_JUMP_RANGE},
+   * past the graph diameter); wear scales this down linearly to a floor of 1, so
+   * a dead sensor array still shows the directly connected neighbors.
+   */
+  sensorJumpRange(): number {
+    const frac = this.subsystems.sensors / SUBSYSTEM_MAX
+    return Math.max(1, Math.round(frac * SENSOR_FULL_JUMP_RANGE))
+  }
+
+  /**
+   * Whether a system appears on the map at all. A system must first pass the
+   * license gate — the player is licensed for it, or it neighbors a system they
+   * are licensed for — which fixes the set they could ever see. Sensors then cap
+   * that set by distance: only systems within {@link sensorJumpRange} jumps of
+   * the current system show, so wear hides the farthest systems first and at zero
+   * integrity leaves just the direct neighbors.
    */
   isSystemVisible(systemId: string): boolean {
+    if (systemId === this.currentSystemId) return true
+    if (!this.isSystemInLicenseReach(systemId)) return false
+    return this.jumpDistanceFromCurrent(systemId) <= this.sensorJumpRange()
+  }
+
+  /** Whether a system is licensed, or a direct neighbor of a licensed system. */
+  private isSystemInLicenseReach(systemId: string): boolean {
     if (this.hasLicense(systemId)) return true
-    // Neighboring (unlicensed) systems are only picked up if the ship's sensors
-    // can still reach them. Wear shrinks that reach from a full sweep down to
-    // nothing, so distant neighbors fade out first and none show at 0 integrity.
-    const range = (this.subsystems.sensors / SUBSYSTEM_MAX) * SENSOR_FULL_RANGE
-    if (range <= 0) return false
-    const target = SYSTEMS.find((s) => s.id === systemId)
-    if (!target) return false
     for (const id of this.licensedSystemIds) {
       const licensed = SYSTEMS.find((s) => s.id === id)
-      if (!licensed?.connections.includes(systemId)) continue
-      if (Math.hypot(target.x - licensed.x, target.y - licensed.y) <= range) return true
+      if (licensed?.connections.includes(systemId)) return true
     }
     return false
+  }
+
+  /**
+   * Shortest number of jumps from the current system to the given one, by
+   * breadth-first search over the jump graph. Returns Infinity if unreachable.
+   */
+  private jumpDistanceFromCurrent(systemId: string): number {
+    if (systemId === this.currentSystemId) return 0
+    const visited = new Set<string>([this.currentSystemId])
+    let frontier = [this.currentSystemId]
+    let distance = 0
+    while (frontier.length > 0) {
+      distance++
+      const next: string[] = []
+      for (const id of frontier) {
+        const system = SYSTEMS.find((s) => s.id === id)
+        if (!system) continue
+        for (const neighborId of system.connections) {
+          if (visited.has(neighborId)) continue
+          if (neighborId === systemId) return distance
+          visited.add(neighborId)
+          next.push(neighborId)
+        }
+      }
+      frontier = next
+    }
+    return Infinity
   }
 
   /** Flat credit cost of any single travel license. */
