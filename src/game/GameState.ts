@@ -126,14 +126,14 @@ const DAYS_PER_YEAR = 365
 
 // --- Travel damage & subsystem wear ---
 // Every jump lightly wears the ship's subsystems. Each system independently has
-// a chance to take a small random hit, scaled by the days spent in transit, so
-// longer hauls are rougher. Effects of the accumulated wear are applied wherever
-// the relevant stat is read (travel time, cargo, visibility, crew).
+// a chance to take a small random hit per jump. Effects of the accumulated wear
+// are applied wherever the relevant stat is read (travel time, cargo, visibility,
+// crew).
 /** Chance, per subsystem per jump, that it takes any wear at all. */
 const TRAVEL_DAMAGE_CHANCE = 0.5
-/** Integrity lost by a worn subsystem, per day of transit, before the random spread. */
+/** Integrity lost by a worn subsystem on a jump (a 1-2% hit, before the random spread). */
 const TRAVEL_DAMAGE_MIN = 1
-const TRAVEL_DAMAGE_MAX = 5
+const TRAVEL_DAMAGE_MAX = 2
 /** At 0 engine integrity a jump would take this much longer (travel is blocked there anyway). */
 const ENGINE_MAX_SLOWDOWN = 1.0
 /** At 0 hull integrity, cargo capacity is cut by this fraction (blocked at 0 anyway). */
@@ -555,21 +555,20 @@ class GameStateImpl {
     const days = this.jumpDateAdvance(systemId)
     this.galaxyDate += days
     this.currentSystemId = systemId
-    this.applyTravelDamage(days)
+    this.applyTravelDamage()
     this.advanceMarketTick()
     return true
   }
 
   /**
    * Wears the ship a little for a jump: each subsystem independently has a
-   * {@link TRAVEL_DAMAGE_CHANCE} chance of taking a small random hit, scaled by
-   * the days spent in transit so longer hauls bite harder. Integrity floors at 0.
+   * {@link TRAVEL_DAMAGE_CHANCE} chance of taking a small random hit, a flat
+   * 1-2% per jump regardless of distance. Integrity floors at 0.
    */
-  private applyTravelDamage(days: number) {
+  private applyTravelDamage() {
     for (const id of SUBSYSTEM_IDS) {
       if (Math.random() >= TRAVEL_DAMAGE_CHANCE) continue
-      const perDay = TRAVEL_DAMAGE_MIN + Math.random() * (TRAVEL_DAMAGE_MAX - TRAVEL_DAMAGE_MIN)
-      const damage = perDay * Math.max(1, days)
+      const damage = TRAVEL_DAMAGE_MIN + Math.random() * (TRAVEL_DAMAGE_MAX - TRAVEL_DAMAGE_MIN)
       this.subsystems[id] = Math.max(0, this.subsystems[id] - damage)
     }
   }
